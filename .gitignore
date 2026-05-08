@@ -1,0 +1,34 @@
+# Output directories - contain personal email content
+markdown/
+output/
+
+# Extraction state (contains timestamps specific to user)
+extraction_state.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Email files (input)
+*.msg
+*.eml
+
+# Claude Code local settings
+.claude/settings.local.json
