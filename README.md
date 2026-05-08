@@ -23,6 +23,12 @@ python outlook_to_markdown.py
 
 # Full extraction (last 7 days)
 python outlook_to_markdown.py --full
+
+# Specify custom output directory
+python outlook_to_markdown.py --output "C:\path\to\obsidian\vault"
+
+# Combine flags
+python outlook_to_markdown.py --full --output "C:\path\to\obsidian\vault"
 ```
 
 **Requirements:** Windows with Outlook Classic installed and configured.
@@ -89,11 +95,16 @@ Here's the update on the project...
 
 ## Configuration
 
-Edit the constants at the top of `outlook_to_markdown.py`:
+**Command-line options:**
+
+- `--full` - Extract last 7 days instead of incremental
+- `--output`, `-o` - Specify output directory (overrides default)
+
+**Script constants** (edit `outlook_to_markdown.py`):
 
 - `DEFAULT_LOOKBACK_DAYS` - Days to look back on full extraction (default: 7)
 - `STATE_FILE` - JSON file tracking extraction state
-- `OUTPUT_DIR` - Output directory for Markdown files
+- `OUTPUT_DIR` - Default output directory for Markdown files
 
 ## Use Cases
 

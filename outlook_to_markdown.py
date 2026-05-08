@@ -12,8 +12,10 @@ Features:
 - Outputs Obsidian-flavored markdown with frontmatter, callouts, tags, and wikilinks
 
 Usage:
-    python outlook_to_markdown.py           # Incremental extraction
-    python outlook_to_markdown.py --full    # Full re-extraction (last 7 days)
+    python outlook_to_markdown.py                       # Incremental extraction
+    python outlook_to_markdown.py --full                # Full re-extraction (last 7 days)
+    python outlook_to_markdown.py --output /path/to/dir # Custom output directory
+    python outlook_to_markdown.py --full -o /path/to/dir
 """
 import os
 import re
@@ -513,12 +515,14 @@ def main():
     parser = argparse.ArgumentParser(description='Extract Outlook emails to Obsidian Markdown')
     parser.add_argument('--full', action='store_true',
                         help=f'Full extraction (last {DEFAULT_LOOKBACK_DAYS} days)')
+    parser.add_argument('--output', '-o', type=str,
+                        help='Output directory for markdown files')
     args = parser.parse_args()
 
     # Setup paths
     script_dir = Path(__file__).parent
     state_path = script_dir / STATE_FILE
-    output_dir = script_dir / OUTPUT_DIR
+    output_dir = Path(args.output) if args.output else script_dir / OUTPUT_DIR
     output_dir.mkdir(exist_ok=True)
 
     print("=" * 60)
