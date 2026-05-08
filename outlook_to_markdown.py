@@ -14,8 +14,9 @@ Features:
 Usage:
     python outlook_to_markdown.py                       # Incremental extraction
     python outlook_to_markdown.py --full                # Full re-extraction (last 7 days)
+    python outlook_to_markdown.py --full --days 14      # Full re-extraction (last 14 days)
     python outlook_to_markdown.py --output /path/to/dir # Custom output directory
-    python outlook_to_markdown.py --full -o /path/to/dir
+    python outlook_to_markdown.py --full -d 30 -o /path/to/dir
 """
 import os
 import re
@@ -514,7 +515,9 @@ def create_thread_markdown(thread_emails, thread_subject):
 def main():
     parser = argparse.ArgumentParser(description='Extract Outlook emails to Obsidian Markdown')
     parser.add_argument('--full', action='store_true',
-                        help=f'Full extraction (last {DEFAULT_LOOKBACK_DAYS} days)')
+                        help=f'Full extraction (last {DEFAULT_LOOKBACK_DAYS} days by default)')
+    parser.add_argument('--days', '-d', type=int, default=DEFAULT_LOOKBACK_DAYS,
+                        help=f'Number of days to look back (default: {DEFAULT_LOOKBACK_DAYS})')
     parser.add_argument('--output', '-o', type=str,
                         help='Output directory for markdown files')
     args = parser.parse_args()
@@ -533,9 +536,9 @@ def main():
     state = load_extraction_state(state_path)
 
     if args.full or state is None:
-        since_date = datetime.now() - timedelta(days=DEFAULT_LOOKBACK_DAYS)
+        since_date = datetime.now() - timedelta(days=args.days)
         print(f"\nMode: {'Full extraction' if args.full else 'First run'}")
-        print(f"Extracting emails from last {DEFAULT_LOOKBACK_DAYS} days")
+        print(f"Extracting emails from last {args.days} days")
     else:
         since_date = datetime.fromisoformat(state['last_extraction'])
         print(f"\nMode: Incremental extraction")
@@ -583,13 +586,21 @@ def main():
     success_count = 0
 
     for thread_subject, emails in threads.items():
-        filename = sanitize_filename(thread_subject) + ".md"
+        # Get the latest date from the thread for sorting
+        thread_dates = [e['date'] for e in emails if e.get('date')]
+        if thread_dates:
+            latest_date = max(thread_dates)
+            date_prefix = latest_date.strftime("%Y-%m-%d %H%M")
+        else:
+            date_prefix = "0000-00-00 0000"
+
+        filename = f"{date_prefix} - {sanitize_filename(thread_subject)}.md"
         output_path = output_dir / filename
 
         # Handle duplicate filenames
         if output_path.exists():
             file_hash = hashlib.md5(thread_subject.encode()).hexdigest()[:8]
-            filename = sanitize_filename(thread_subject) + f"_{file_hash}.md"
+            filename = f"{date_prefix} {sanitize_filename(thread_subject)}_{file_hash}.md"
             output_path = output_dir / filename
 
         markdown_content = create_thread_markdown(emails, thread_subject)
@@ -597,7 +608,7 @@ def main():
         if markdown_content:
             with open(output_path, 'w', encoding='utf-8') as f:
                 f.write(markdown_content)
-            print(f"  [OK] {filename} ({len(emails)} email(s))")
+            print(f"  [OK] {filename.encode('ascii', 'replace').decode()} ({len(emails)} email(s))")
             success_count += 1
 
     # Save extraction state

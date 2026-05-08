@@ -24,11 +24,14 @@ python outlook_to_markdown.py
 # Full extraction (last 7 days)
 python outlook_to_markdown.py --full
 
+# Full extraction with custom date range (last 14 days)
+python outlook_to_markdown.py --full --days 14
+
 # Specify custom output directory
 python outlook_to_markdown.py --output "C:\path\to\obsidian\vault"
 
-# Combine flags
-python outlook_to_markdown.py --full --output "C:\path\to\obsidian\vault"
+# Combine flags (last 30 days to custom directory)
+python outlook_to_markdown.py --full -d 30 -o "C:\path\to\obsidian\vault"
 ```
 
 **Requirements:** Windows with Outlook Classic installed and configured.
@@ -55,8 +58,15 @@ pip install -r requirements.txt
 
 ## Output Format
 
-Emails are converted to Markdown with:
+**Filenames** use ISO 8601 format for chronological sorting:
 
+```text
+2026-05-08 1727 - Project Update.md
+```
+
+Format: `YYYY-MM-DD HHMM - Subject.md` (date and time of latest message in thread)
+
+**Content** includes:
 - **YAML frontmatter** with title, date, participants, and tags
 - **Thread summary** callout showing message count and date range
 - **Individual messages** with sender, date (as wikilink), and cleaned content
@@ -97,12 +107,13 @@ Here's the update on the project...
 
 **Command-line options:**
 
-- `--full` - Extract last 7 days instead of incremental
+- `--full` - Extract from a date range instead of incremental
+- `--days`, `-d` - Number of days to look back (default: 7, used with `--full`)
 - `--output`, `-o` - Specify output directory (overrides default)
 
 **Script constants** (edit `outlook_to_markdown.py`):
 
-- `DEFAULT_LOOKBACK_DAYS` - Days to look back on full extraction (default: 7)
+- `DEFAULT_LOOKBACK_DAYS` - Default days to look back (default: 7, override with `--days`)
 - `STATE_FILE` - JSON file tracking extraction state
 - `OUTPUT_DIR` - Default output directory for Markdown files
 
