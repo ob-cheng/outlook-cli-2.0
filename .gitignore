@@ -38,4 +38,6 @@ Thumbs.db
 # Email files
 *.msg
 *.eml
-.claude/
+
+# Claude Code local settings (keep skills/)
+.claude/settings.local.json

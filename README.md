@@ -80,6 +80,9 @@ python outlook.py search --unread
 # From specific person
 python outlook.py search --filter-email john@company.com
 
+# Filter by domain
+python outlook.py search --filter-domain vendor.com
+
 # With keyword
 python outlook.py search --keyword "meeting" --days 14
 
@@ -93,9 +96,17 @@ python outlook.py search \
 
 # Date range
 python outlook.py search --from-date 2026-05-01 --to-date 2026-05-31
+
+# Search and export in one command
+python outlook.py search --keyword "project" --export ./project-emails
+
+# Export only, skip terminal display
+python outlook.py search --keyword "project" --export ./emails --no-view
 ```
 
-### Export to markdown
+Options like `--folder`, `--filter-email`, and `--filter-domain` can be specified multiple times to include more than one.
+
+### Export to Obsidian markdown
 
 ```bash
 # Basic export
@@ -110,6 +121,12 @@ python outlook.py export --output ./project \
 # Multiple folders
 python outlook.py export --output ./all \
   --folder Inbox --folder "Sent Items" --folder Archive
+
+# Export each email separately (no thread grouping)
+python outlook.py export --output ./singles --days 7 --no-threads
+
+# Skip files that already exist (incremental export)
+python outlook.py export --output ./emails --days 30 --no-overwrite
 ```
 
 ### Send email
@@ -160,6 +177,11 @@ python outlook.py reply <message-id> \
   --body "See attached analysis" \
   --attach analysis.pdf
 
+# Reply with HTML formatting
+python outlook.py reply <message-id> \
+  --body "<p>Thanks!</p><ul><li>Point 1</li></ul>" \
+  --html
+
 # Draft reply
 python outlook.py reply <message-id> \
   --body "My response" \
@@ -169,6 +191,12 @@ python outlook.py reply <message-id> \
 python outlook.py forward <message-id> \
   --to colleague@example.com \
   --body "FYI"
+
+# Forward with HTML body
+python outlook.py forward <message-id> \
+  --to colleague@example.com \
+  --body "<b>Please review</b>" \
+  --html
 ```
 
 ### Calendar
@@ -196,6 +224,13 @@ python outlook.py cal create \
   --end "2026-05-15 15:00" \
   --location "Room A" \
   --body "Quarterly planning"
+
+# Create event without reminder
+python outlook.py cal create \
+  --subject "Focus time" \
+  --start "2026-05-15 09:00" \
+  --end "2026-05-15 12:00" \
+  --no-reminder
 
 # Delete event
 python outlook.py cal delete <event-id>

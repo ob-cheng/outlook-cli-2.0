@@ -1,38 +1,52 @@
 ---
 name: extract-emails
-description: Extract Outlook emails to Obsidian markdown. Use when user asks to "extract emails", "do an extraction", or "get emails".
+description: Export Outlook emails to Obsidian markdown. Use when user asks to "extract emails", "export emails", or "get emails to markdown".
 ---
 
-# Email Extraction Skill
+# Email Export Skill
 
-Extract emails from Outlook (Inbox and Sent Items) and convert them to Obsidian-flavored markdown.
+Export emails from Outlook to Obsidian-flavored markdown files.
 
 ## How to run
 
 ```bash
 cd "./"
-python outlook_to_markdown.py --output "~/Obsidian/Emails"
+python outlook.py export --output "~/Obsidian/Emails" --days 7
 ```
 
 ## Options
 
-- **Incremental extraction** (default): Only extracts emails since the last run
-- **Full extraction**: Add `--full` flag to extract last 7 days
+- `--output DIR` - Output directory (required)
+- `--days N` - Days to look back (default: 7)
+- `--folder NAME` - Folder to export from (can specify multiple)
+- `--filter-email ADDRESS` - Filter by participant email
+- `--filter-domain DOMAIN` - Filter by email domain
+- `--keyword TEXT` - Filter by keyword in subject/body
+- `--no-threads` - Export each email as separate file
+- `--no-overwrite` - Skip files that already exist
 
 ## Examples
 
-Incremental:
+Last 7 days:
+
 ```bash
-python outlook_to_markdown.py --output "~/Obsidian/Emails"
+python outlook.py export --output "~/Obsidian/Emails"
 ```
 
-Full 7-day extraction:
+Last 30 days from Inbox only:
+
 ```bash
-python outlook_to_markdown.py --full --output "~/Obsidian/Emails"
+python outlook.py export --output "..." --folder Inbox --days 30
 ```
 
-## Output
+Filter by sender:
 
-- Markdown files are saved to the Obsidian vault at `00_Emails Inbox`
-- Emails are grouped by thread (conversation)
-- State is tracked in `extraction_state.json`
+```bash
+python outlook.py export --output "..." --filter-email client@company.com --days 14
+```
+
+Incremental export (skip existing):
+
+```bash
+python outlook.py export --output "..." --days 30 --no-overwrite
+```
