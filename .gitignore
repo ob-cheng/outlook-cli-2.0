@@ -1,6 +1,15 @@
 # Output directories - contain personal email content
 markdown/
 output/
+test_output*/
+emails/
+archive/
+Evidence library/
+RTInception/
+Reveal Geo/
+Brand 360/
+christal clarke/
+sales report/
 
 # Extraction state (contains timestamps specific to user)
 extraction_state.json

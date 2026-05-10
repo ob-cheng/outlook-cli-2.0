@@ -17,6 +17,11 @@ Usage:
     python outlook_to_markdown.py --full --days 14      # Full re-extraction (last 14 days)
     python outlook_to_markdown.py --output /path/to/dir # Custom output directory
     python outlook_to_markdown.py --full -d 30 -o /path/to/dir
+    python outlook_to_markdown.py --unread              # Unread messages only
+    python outlook_to_markdown.py --folder Inbox        # Specific folder
+    python outlook_to_markdown.py --folder "Project X"  # Custom folder by name
+    python outlook_to_markdown.py --list-folders        # List all available folders
+    python outlook_to_markdown.py --from-date 2024-01-01 --to-date 2024-01-31  # Date range
 """
 import os
 import re
@@ -71,6 +76,147 @@ def connect_to_outlook():
         raise
 
 
+# Folder type constants for GetDefaultFolder
+DEFAULT_FOLDERS = {
+    'inbox': 6,
+    'sent': 5,
+    'sent items': 5,
+    'drafts': 16,
+    'deleted': 3,
+    'deleted items': 3,
+    'outbox': 4,
+    'junk': 23,
+    'junk email': 23,
+    'archive': 0,  # Special handling needed
+    'calendar': 9,
+    'contacts': 10,
+    'tasks': 13,
+    'notes': 12,
+}
+
+
+def list_all_folders(namespace, indent=0):
+    """Recursively list all folders in the mailbox."""
+    folders = []
+
+    def traverse_folders(folder_collection, path="", level=0):
+        for i in range(1, folder_collection.Count + 1):
+            try:
+                folder = folder_collection.Item(i)
+                folder_path = f"{path}/{folder.Name}" if path else folder.Name
+                folders.append({
+                    'name': folder.Name,
+                    'path': folder_path,
+                    'level': level,
+                    'count': folder.Items.Count if hasattr(folder, 'Items') else 0
+                })
+                # Recurse into subfolders
+                if folder.Folders.Count > 0:
+                    traverse_folders(folder.Folders, folder_path, level + 1)
+            except Exception:
+                continue
+
+    # Traverse all accounts/stores
+    for i in range(1, namespace.Folders.Count + 1):
+        try:
+            store = namespace.Folders.Item(i)
+            folders.append({
+                'name': store.Name,
+                'path': store.Name,
+                'level': 0,
+                'count': 0,
+                'is_store': True
+            })
+            traverse_folders(store.Folders, store.Name, 1)
+        except Exception:
+            continue
+
+    return folders
+
+
+def find_folder_by_name(namespace, folder_name):
+    """Find a folder by name (case-insensitive). Returns the folder object."""
+    folder_lower = folder_name.lower().strip()
+
+    # Check if it's a default folder
+    if folder_lower in DEFAULT_FOLDERS:
+        folder_id = DEFAULT_FOLDERS[folder_lower]
+        if folder_id > 0:
+            try:
+                return namespace.GetDefaultFolder(folder_id)
+            except Exception:
+                pass
+
+    # Search by name in all folders
+    def search_folders(folder_collection, target_name):
+        for i in range(1, folder_collection.Count + 1):
+            try:
+                folder = folder_collection.Item(i)
+                if folder.Name.lower() == target_name:
+                    return folder
+                # Search subfolders
+                if folder.Folders.Count > 0:
+                    result = search_folders(folder.Folders, target_name)
+                    if result:
+                        return result
+            except Exception:
+                continue
+        return None
+
+    # Search all stores
+    for i in range(1, namespace.Folders.Count + 1):
+        try:
+            store = namespace.Folders.Item(i)
+            if store.Name.lower() == folder_lower:
+                return store
+            result = search_folders(store.Folders, folder_lower)
+            if result:
+                return result
+        except Exception:
+            continue
+
+    return None
+
+
+def find_folder_by_path(namespace, folder_path):
+    """Find a folder by full path (e.g., 'Account/Inbox/Subfolder')."""
+    parts = [p.strip() for p in folder_path.split('/') if p.strip()]
+    if not parts:
+        return None
+
+    # Start from the store (first part)
+    current = None
+    for i in range(1, namespace.Folders.Count + 1):
+        try:
+            store = namespace.Folders.Item(i)
+            if store.Name.lower() == parts[0].lower():
+                current = store
+                break
+        except Exception:
+            continue
+
+    if not current:
+        # Try finding just by name
+        return find_folder_by_name(namespace, parts[-1])
+
+    # Navigate through the path
+    for part in parts[1:]:
+        found = False
+        for j in range(1, current.Folders.Count + 1):
+            try:
+                subfolder = current.Folders.Item(j)
+                if subfolder.Name.lower() == part.lower():
+                    current = subfolder
+                    found = True
+                    break
+            except Exception:
+                continue
+        if not found:
+            return None
+
+    return current
+
+
 def format_outlook_date(dt):
     """Format datetime for Outlook Restrict filter."""
     return dt.strftime("%m/%d/%Y %H:%M %p")
@@ -83,6 +229,97 @@ def extract_email_address(full_address):
     # Match email pattern
     match = re.search(r'[\w\.-]+@[\w\.-]+\.\w+', str(full_address))
     return match.group(0).lower() if match else None
+
+
+def extract_all_email_addresses(field_string):
+    """Extract all email addresses from a To/CC field string."""
+    if not field_string:
+        return []
+    matches = re.findall(r'[\w\.-]+@[\w\.-]+\.\w+', str(field_string))
+    return [m.lower() for m in matches]
+
+
+def matches_keyword_filter(email_data, filter_keyword):
+    """Check if email subject or body contains the keyword (case-insensitive)."""
+    if not filter_keyword:
+        return True
+    keyword_lower = filter_keyword.lower()
+    subject = (email_data.get('subject') or '').lower()
+    text_body = (email_data.get('text_body') or '').lower()
+    return keyword_lower in subject or keyword_lower in text_body
+
+
+def matches_email_filter(email_data, filter_emails=None, filter_domains=None, max_recipients=20, debug=False):
+    """Check if email involves any of the filtered email addresses or domains in From/To/CC.
+
+    Args:
+        email_data: Email data dictionary
+        filter_emails: List of email addresses to filter by
+        filter_domains: List of email domains to filter by (e.g., ['accessinfinity.com'])
+        max_recipients: Maximum total recipients (To + CC) to include. Emails with more
+                        recipients are considered mass distribution and excluded.
+        debug: Print debug output
+    """
+    if not filter_emails and not filter_domains:
+        return True
+
+    # Skip mass distribution emails
+    to_emails = email_data.get('to_emails', [])
+    cc_emails = email_data.get('cc_emails', [])
+    total_recipients = len(to_emails) + len(cc_emails)
+
+    if total_recipients > max_recipients:
+        if debug:
+            print(f"    [DEBUG] Skipped: {total_recipients} recipients (mass distribution)")
+        return False
+
+    filter_email_set = {e.lower().strip() for e in filter_emails} if filter_emails else set()
+    filter_domain_set = {d.lower().strip().lstrip('@') for d in filter_domains} if filter_domains else set()
+
+    def matches_domain(email_addr):
+        """Check if email address matches any filter domain."""
+        if not email_addr or '@' not in email_addr:
+            return False
+        domain = email_addr.lower().split('@')[1]
+        return domain in filter_domain_set
+
+    # Check sender SMTP email
+    sender_smtp = email_data.get('sender_smtp')
+    if sender_smtp:
+        if sender_smtp.lower() in filter_email_set:
+            if debug:
+                print(f"    [DEBUG] Matched sender email: {sender_smtp}")
+            return True
+        if matches_domain(sender_smtp):
+            if debug:
+                print(f"    [DEBUG] Matched sender domain: {sender_smtp}")
+            return True
+
+    # Check To recipient emails
+    for addr in to_emails:
+        if addr:
+            if addr.lower() in filter_email_set:
+                if debug:
+                    print(f"    [DEBUG] Matched TO email: {addr}")
+                return True
+            if matches_domain(addr):
+                if debug:
+                    print(f"    [DEBUG] Matched TO domain: {addr}")
+                return True
+
+    # Check CC recipient emails
+    for addr in cc_emails:
+        if addr:
+            if addr.lower() in filter_email_set:
+                if debug:
+                    print(f"    [DEBUG] Matched CC email: {addr}")
+                return True
+            if matches_domain(addr):
+                if debug:
+                    print(f"    [DEBUG] Matched CC domain: {addr}")
+                return True
+
+    return False
 
 
 def extract_display_name(full_address):
@@ -101,34 +338,81 @@ def extract_display_name(full_address):
     # Clean up common patterns
     name = re.sub(r'\s*<[^>]+>\s*', '', name)  # Remove <email>
     name = re.sub(r'\([^)]*\)', '', name)  # Remove (EXT) etc
-    name = name.replace(';', ',').strip()
+    name = name.strip()
+
+    # Convert "Last, First" to "First Last"
+    if ',' in name:
+        parts = [p.strip() for p in name.split(',')]
+        if len(parts) == 2 and parts[0] and parts[1]:
+            # Check if it looks like "Last, First" (not "Title, Name" etc.)
+            # Both parts should start with capital letter and be short (name-like)
+            if (parts[0][0].isupper() and parts[1][0].isupper() and
+                len(parts[0]) < 20 and len(parts[1]) < 20):
+                name = f"{parts[1]} {parts[0]}"
+
     return name if name else None
+
+
+def get_smtp_address(recip):
+    """Get SMTP email address from recipient, handling Exchange format."""
+    try:
+        # Try to get SMTP address from Exchange user
+        addr_entry = recip.AddressEntry
+        if addr_entry.Type == "EX":
+            # Exchange user - get SMTP address
+            exch_user = addr_entry.GetExchangeUser()
+            if exch_user:
+                return exch_user.PrimarySmtpAddress
+        # Fallback to direct address
+        return recip.Address
+    except Exception:
+        return recip.Address
 
 
 def extract_recipients(recipients_obj):
     """Extract recipient information from Outlook Recipients object."""
     if not recipients_obj:
-        return "N/A", []
+        return "N/A", [], []
     try:
         recipients = []
         names = []
+        emails = []
         for i in range(1, recipients_obj.Count + 1):
             recip = recipients_obj.Item(i)
             name = recip.Name
-            email = recip.Address
+            email = get_smtp_address(recip)
             if name:
                 clean_name = extract_display_name(name)
                 if clean_name:
                     names.append(clean_name)
+            if email:
+                smtp_email = extract_email_address(email)
+                if smtp_email:
+                    emails.append(smtp_email)
             if name and email:
                 recipients.append(f"{name} <{email}>")
             elif email:
                 recipients.append(email)
             elif name:
                 recipients.append(name)
-        return "; ".join(recipients) if recipients else "N/A", names
+        return "; ".join(recipients) if recipients else "N/A", names, emails
     except Exception:
-        return "N/A", []
+        return "N/A", [], []
+
+
+def get_sender_smtp_address(mail_item):
+    """Get SMTP email address of sender, handling Exchange format."""
+    try:
+        # Try to get from sender's AddressEntry
+        sender = mail_item.Sender
+        if sender and sender.Type == "EX":
+            exch_user = sender.GetExchangeUser()
+            if exch_user:
+                return exch_user.PrimarySmtpAddress
+        # Fallback to direct address
+        return mail_item.SenderEmailAddress
+    except Exception:
+        return mail_item.SenderEmailAddress
 
 
 def extract_email_data(mail_item, is_sent=False):
@@ -140,10 +424,10 @@ def extract_email_data(mail_item, is_sent=False):
         # Sender info
         try:
             sender_name = mail_item.SenderName or ""
-            sender_email = mail_item.SenderEmailAddress or ""
+            sender_email = get_sender_smtp_address(mail_item) or ""
+            sender_smtp = extract_email_address(sender_email)
             sender_clean = extract_display_name(sender_name) or sender_email
-            sender_domain = extract_email_address(sender_email)
-            sender_domain = sender_domain.split('@')[1] if sender_domain and '@' in sender_domain else None
+            sender_domain = sender_smtp.split('@')[1] if sender_smtp and '@' in sender_smtp else None
             if sender_name and sender_email:
                 sender = f"{sender_name} <{sender_email}>"
             else:
@@ -152,19 +436,31 @@ def extract_email_data(mail_item, is_sent=False):
             sender = "Unknown"
             sender_clean = "Unknown"
             sender_domain = None
+            sender_smtp = None
 
         # Recipients
         try:
-            to, to_names = extract_recipients(mail_item.Recipients)
+            to, to_names, to_emails = extract_recipients(mail_item.Recipients)
         except Exception:
             to = "N/A"
             to_names = []
+            to_emails = []
 
-        # CC
+        # CC - need to extract emails from CC recipients too
         try:
             cc = mail_item.CC if mail_item.CC else None
+            cc_emails = []
+            # Try to get CC recipients with SMTP addresses
+            for i in range(1, mail_item.Recipients.Count + 1):
+                recip = mail_item.Recipients.Item(i)
+                if recip.Type == 2:  # 2 = CC recipient
+                    smtp = get_smtp_address(recip)
+                    email = extract_email_address(smtp)
+                    if email:
+                        cc_emails.append(email)
         except Exception:
             cc = None
+            cc_emails = []
 
         # Date
         try:
@@ -191,9 +487,12 @@ def extract_email_data(mail_item, is_sent=False):
             'sender': sender,
             'sender_clean': sender_clean,
             'sender_domain': sender_domain,
+            'sender_smtp': sender_smtp,
             'to': to,
             'to_names': to_names,
+            'to_emails': to_emails,
             'cc': cc,
+            'cc_emails': cc_emails,
             'date': date,
             'html_body': html_body,
             'text_body': text_body,
@@ -203,18 +502,36 @@ def extract_email_data(mail_item, is_sent=False):
         return {'error': str(e), 'subject': 'Unknown'}
 
 
-def extract_emails_from_folder(folder, since_date, is_sent=False):
-    """Extract emails from an Outlook folder since a given date."""
+def extract_emails_from_folder(folder, since_date, until_date=None, is_sent=False,
+                                filter_emails=None, filter_domains=None, filter_keyword=None,
+                                unread_only=False):
+    """Extract emails from an Outlook folder within a date range.
+
+    Args:
+        folder: Outlook folder object
+        since_date: Start date (extract emails after this date)
+        until_date: End date (extract emails before this date), optional
+        is_sent: Whether this is a sent items folder
+        filter_emails: List of email addresses to filter by
+        filter_domains: List of domains to filter by
+        filter_keyword: Keyword to search in subject/body
+        unread_only: If True, only extract unread messages
+    """
     emails = []
 
     try:
         items = folder.Items
 
-        # Apply date filter
-        if is_sent:
-            date_filter = f"[SentOn] > '{format_outlook_date(since_date)}'"
-        else:
-            date_filter = f"[ReceivedTime] > '{format_outlook_date(since_date)}'"
+        # Build date filter
+        date_field = "[SentOn]" if is_sent else "[ReceivedTime]"
+        date_filter = f"{date_field} > '{format_outlook_date(since_date)}'"
+
+        if until_date:
+            date_filter += f" AND {date_field} < '{format_outlook_date(until_date)}'"
+
+        # Add unread filter if requested
+        if unread_only:
+            date_filter += " AND [UnRead] = True"
 
         filtered_items = items.Restrict(date_filter)
 
@@ -227,6 +544,7 @@ def extract_emails_from_folder(folder, since_date, is_sent=False):
         count = filtered_items.Count
         print(f"  Found {count} email(s)")
 
+        matched_count = 0
         for i in range(1, count + 1):
             try:
                 mail = filtered_items.Item(i)
@@ -237,10 +555,20 @@ def extract_emails_from_folder(folder, since_date, is_sent=False):
                         # Skip automatic replies
                         if is_auto_reply(email_data.get('subject', '')):
                             continue
+                        # Apply participant email filter
+                        if (filter_emails or filter_domains) and not matches_email_filter(email_data, filter_emails, filter_domains):
+                            continue
+                        # Apply keyword filter
+                        if filter_keyword and not matches_keyword_filter(email_data, filter_keyword):
+                            continue
                         emails.append(email_data)
+                        matched_count += 1
             except Exception as e:
                 print(f"  [WARN] Skipping email {i}: {e}")
                 continue
+
+        if filter_emails or filter_domains or filter_keyword:
+            print(f"  Matched {matched_count} email(s) with filter")
 
     except Exception as e:
         print(f"  [ERROR] Failed to extract from folder: {e}")
@@ -289,8 +617,65 @@ def sanitize_filename(filename, max_length=50):
     return filename
 
 
+def strip_signature(content):
+    """Remove email signature noise (logos, contact tables) while keeping names."""
+    lines = content.split('\n')
+    cleaned_lines = []
+
+    for line in lines:
+        # Skip lines containing SafeLinks URLs (Microsoft URL protection)
+        if 'safelinks.protection.outlook.com' in line:
+            continue
+
+        # Skip signature table lines with contact info patterns (W:, E:, LinkedIn, etc.)
+        if '|' in line and re.search(r'\b(W:|E:|P:|M:|LinkedIn|Twitter|Facebook|www\.|\.com)\b', line, re.IGNORECASE):
+            continue
+
+        # Extract name from signature table lines FIRST (before other table filters)
+        # This catches lines like: | | --- | | **Sriram Iyer** | | Head of Engineering | |
+        if '|' in line and '**' in line:
+            # Extract bold text
+            name_match = re.search(r'\*\*([^*]+)\*\*', line)
+            if name_match:
+                name = name_match.group(1)
+                # Clean Unicode chars (zero-width space, non-breaking space)
+                name = name.replace('​', '').replace(' ', ' ').strip()
+                # Skip if it looks like a title
+                if name and not re.search(r'(Head|Director|Manager|Engineer|President|CEO|CTO|VP|Chief|Senior|Lead|of)', name, re.IGNORECASE):
+                    cleaned_lines.append(f'**{name}**')
+            continue
+        # Skip other table lines with job titles
+        if '|' in line and re.search(r'\b(Head|Director|Manager|Engineer|President|CEO|CTO|VP|Chief|Senior|Lead|Principal)\b', line, re.IGNORECASE):
+            continue
+
+        # Skip lines that are mostly empty table cells or malformed tables
+        if re.match(r'^[\s|]+$', line):
+            continue
+
+        # Skip lines with escaped underscores (horizontal rules in signatures)
+        if re.match(r'^[\s|_\\]+$', line) or '\\_' * 5 in line:
+            continue
+
+        # Skip table separator lines (| --- | --- |)
+        if re.match(r'^\|[\s\-|]+\|', line):
+            continue
+
+        # Skip empty table rows (|  |  | or | |)
+        if line.startswith('|') and re.sub(r'[\s|]', '', line) == '':
+            continue
+
+        cleaned_lines.append(line)
+
+    content = '\n'.join(cleaned_lines)
+
+    # Clean up mailto: links to just email address
+    content = re.sub(r'\[([^\]]+@[^\]]+)\]\(mailto:[^)]+\)', r'\1', content)
+
+    return content
+
+
 def extract_new_content(html_body, text_body):
-    """Extract only new content from email, stripping quoted replies."""
+    """Extract only new content from email, stripping quoted replies and signatures."""
     if html_body:
         soup = BeautifulSoup(html_body, 'html.parser')
 
@@ -321,6 +706,9 @@ def extract_new_content(html_body, text_body):
                 content = content[:match.start()]
                 break
 
+        # Strip signatures
+        content = strip_signature(content)
+
     elif text_body:
         # For plain text, strip quoted lines
         lines = text_body.split('\n')
@@ -334,6 +722,7 @@ def extract_new_content(html_body, text_body):
                 break
             new_lines.append(line)
         content = '\n'.join(new_lines)
+        content = strip_signature(content)
     else:
         content = "*No content available*"
 
@@ -475,21 +864,16 @@ def create_thread_markdown(thread_emails, thread_subject):
         markdown += f"**Date:** {date_link} {email['date'].strftime('%H:%M') if email.get('date') else ''}  \n"
         markdown += f"{direction_tag}\n\n"
 
-        # Check for external email warning in content
         content = extract_new_content(email.get('html_body'), email.get('text_body'))
 
-        # Extract and format CAUTION warning as callout
-        caution_match = re.search(
+        # Remove external email CAUTION warning (noise)
+        content = re.sub(
             r'CAUTION:?\s*This email originated from outside.*?(?=\n\n|\n[A-Z]|$)',
+            '',
             content,
-            re.IGNORECASE | re.DOTALL
+            flags=re.IGNORECASE | re.DOTALL
         )
-        if caution_match:
-            markdown += "> [!warning] External Email\n"
-            markdown += "> This email originated from outside of your organization.\n\n"
-            # Remove the caution from content
-            content = content[:caution_match.start()] + content[caution_match.end():]
-            content = re.sub(r'_+\s*', '', content)  # Remove underscores separator
+        content = re.sub(r'_+\s*', '', content)  # Remove underscores separator
 
         # Clean up content
         content = content.strip()
@@ -512,6 +896,17 @@ def create_thread_markdown(thread_emails, thread_subject):
     return markdown
 
 
+def parse_date(date_str):
+    """Parse a date string in various formats."""
+    formats = ['%Y-%m-%d', '%Y/%m/%d', '%m/%d/%Y', '%d-%m-%Y']
+    for fmt in formats:
+        try:
+            return datetime.strptime(date_str, fmt)
+        except ValueError:
+            continue
+    raise ValueError(f"Cannot parse date: {date_str}. Use YYYY-MM-DD format.")
+
+
 def main():
     parser = argparse.ArgumentParser(description='Extract Outlook emails to Obsidian Markdown')
     parser.add_argument('--full', action='store_true',
@@ -520,22 +915,83 @@ def main():
                         help=f'Number of days to look back (default: {DEFAULT_LOOKBACK_DAYS})')
     parser.add_argument('--output', '-o', type=str,
                         help='Output directory for markdown files')
+    parser.add_argument('--filter-emails', '-f', type=str,
+                        help='Comma-separated email addresses to filter by (matches From/To/CC)')
+    parser.add_argument('--filter-domains', '-D', type=str,
+                        help='Comma-separated email domains to filter by (e.g., accessinfinity.com)')
+    parser.add_argument('--filter-keyword', '-k', type=str,
+                        help='Keyword to filter by (matches subject or body, case-insensitive)')
+    parser.add_argument('--no-overwrite', action='store_true',
+                        help='Skip creating files that already exist')
+
+    # New features
+    parser.add_argument('--unread', '-u', action='store_true',
+                        help='Extract only unread messages')
+    parser.add_argument('--folder', type=str, action='append',
+                        help='Folder to extract from (can specify multiple). Use --list-folders to see available folders.')
+    parser.add_argument('--list-folders', action='store_true',
+                        help='List all available Outlook folders and exit')
+    parser.add_argument('--from-date', type=str,
+                        help='Start date for extraction (YYYY-MM-DD). Overrides --days.')
+    parser.add_argument('--to-date', type=str,
+                        help='End date for extraction (YYYY-MM-DD). Defaults to now.')
+
     args = parser.parse_args()
 
     # Setup paths
     script_dir = Path(__file__).parent
     state_path = script_dir / STATE_FILE
     output_dir = Path(args.output) if args.output else script_dir / OUTPUT_DIR
-    output_dir.mkdir(exist_ok=True)
 
     print("=" * 60)
     print("Outlook Email to Obsidian Markdown Conversion")
     print("=" * 60)
 
-    # Determine extraction start date
-    state = load_extraction_state(state_path)
+    # Connect to Outlook first (needed for --list-folders)
+    print("\nConnecting to Outlook...")
+    outlook, namespace = connect_to_outlook()
+    print("  Connected successfully")
 
-    if args.full or state is None:
+    # Handle --list-folders
+    if args.list_folders:
+        print("\nAvailable folders:")
+        print("-" * 60)
+        folders = list_all_folders(namespace)
+        for f in folders:
+            indent = "  " * f['level']
+            count_str = f" ({f['count']} items)" if f.get('count', 0) > 0 else ""
+            store_marker = " [ACCOUNT]" if f.get('is_store') else ""
+            # Handle encoding issues with emojis/special chars
+            folder_name = f['name'].encode('ascii', 'replace').decode()
+            print(f"{indent}{folder_name}{count_str}{store_marker}")
+        print("-" * 60)
+        print("\nUse --folder <name> to extract from a specific folder.")
+        print("Examples:")
+        print("  --folder Inbox")
+        print("  --folder 'Sent Items'")
+        print("  --folder Archive")
+        print("  --folder 'My Custom Folder'")
+        return
+
+    output_dir.mkdir(exist_ok=True)
+
+    # Determine extraction date range
+    state = load_extraction_state(state_path)
+    until_date = None
+
+    # Handle explicit date range
+    if args.from_date:
+        since_date = parse_date(args.from_date)
+        print(f"\nMode: Date range extraction")
+        print(f"From: {since_date.strftime('%Y-%m-%d')}")
+        if args.to_date:
+            until_date = parse_date(args.to_date)
+            # Set to end of day
+            until_date = until_date.replace(hour=23, minute=59, second=59)
+            print(f"To: {until_date.strftime('%Y-%m-%d')}")
+        else:
+            print(f"To: now")
+    elif args.full or state is None:
         since_date = datetime.now() - timedelta(days=args.days)
         print(f"\nMode: {'Full extraction' if args.full else 'First run'}")
         print(f"Extracting emails from last {args.days} days")
@@ -546,23 +1002,76 @@ def main():
 
     print(f"Since: {since_date.strftime('%Y-%m-%d %H:%M:%S')}")
 
-    # Connect to Outlook
-    print("\nConnecting to Outlook...")
-    outlook, namespace = connect_to_outlook()
-    print("  Connected successfully")
+    # Parse email filter if provided
+    filter_emails = None
+    if args.filter_emails:
+        filter_emails = [e.strip() for e in args.filter_emails.split(',') if e.strip()]
+        print(f"\nFiltering by email addresses:")
+        for email in filter_emails:
+            print(f"  - {email}")
 
-    # Extract from Inbox
-    print("\nExtracting from Inbox...")
-    inbox = namespace.GetDefaultFolder(6)  # 6 = Inbox
-    inbox_emails = extract_emails_from_folder(inbox, since_date, is_sent=False)
+    # Parse domain filter if provided
+    filter_domains = None
+    if args.filter_domains:
+        filter_domains = [d.strip().lstrip('@') for d in args.filter_domains.split(',') if d.strip()]
+        print(f"\nFiltering by email domains:")
+        for domain in filter_domains:
+            print(f"  - @{domain}")
 
-    # Extract from Sent Items
-    print("\nExtracting from Sent Items...")
-    sent_items = namespace.GetDefaultFolder(5)  # 5 = Sent Items
-    sent_emails = extract_emails_from_folder(sent_items, since_date, is_sent=True)
+    # Parse keyword filter if provided
+    filter_keyword = args.filter_keyword
+    if filter_keyword:
+        print(f"\nFiltering by keyword: \"{filter_keyword}\"")
 
-    # Combine all emails
-    all_emails = inbox_emails + sent_emails
+    # Unread filter
+    if args.unread:
+        print(f"\nFiltering: Unread messages only")
+
+    # Determine which folders to extract from
+    all_emails = []
+
+    if args.folder:
+        # Extract from specified folder(s)
+        for folder_name in args.folder:
+            print(f"\nExtracting from folder: {folder_name}...")
+
+            # Try to find by path first, then by name
+            if '/' in folder_name:
+                folder = find_folder_by_path(namespace, folder_name)
+            else:
+                folder = find_folder_by_name(namespace, folder_name)
+
+            if folder:
+                # Determine if this is a sent folder
+                is_sent = folder_name.lower() in ['sent', 'sent items', 'outbox']
+                folder_emails = extract_emails_from_folder(
+                    folder, since_date, until_date=until_date, is_sent=is_sent,
+                    filter_emails=filter_emails, filter_domains=filter_domains,
+                    filter_keyword=filter_keyword, unread_only=args.unread
+                )
+                all_emails.extend(folder_emails)
+            else:
+                print(f"  [ERROR] Folder not found: {folder_name}")
+                print(f"  Use --list-folders to see available folders")
+    else:
+        # Default: Extract from Inbox and Sent Items
+        print("\nExtracting from Inbox...")
+        inbox = namespace.GetDefaultFolder(6)  # 6 = Inbox
+        inbox_emails = extract_emails_from_folder(
+            inbox, since_date, until_date=until_date, is_sent=False,
+            filter_emails=filter_emails, filter_domains=filter_domains,
+            filter_keyword=filter_keyword, unread_only=args.unread
+        )
+        all_emails.extend(inbox_emails)
+
+        print("\nExtracting from Sent Items...")
+        sent_items = namespace.GetDefaultFolder(5)  # 5 = Sent Items
+        sent_emails = extract_emails_from_folder(
+            sent_items, since_date, until_date=until_date, is_sent=True,
+            filter_emails=filter_emails, filter_domains=filter_domains,
+            filter_keyword=filter_keyword, unread_only=args.unread
+        )
+        all_emails.extend(sent_emails)
     total_count = len(all_emails)
 
     if total_count == 0:
@@ -597,11 +1106,17 @@ def main():
         filename = f"{date_prefix} - {sanitize_filename(thread_subject)}.md"
         output_path = output_dir / filename
 
-        # Handle duplicate filenames
+        # Handle duplicate filenames or skip if no-overwrite
         if output_path.exists():
+            if args.no_overwrite:
+                print(f"  [SKIP] {filename.encode('ascii', 'replace').decode()} (already exists)")
+                continue
             file_hash = hashlib.md5(thread_subject.encode()).hexdigest()[:8]
             filename = f"{date_prefix} {sanitize_filename(thread_subject)}_{file_hash}.md"
             output_path = output_dir / filename
+            if output_path.exists() and args.no_overwrite:
+                print(f"  [SKIP] {filename.encode('ascii', 'replace').decode()} (already exists)")
+                continue
 
         markdown_content = create_thread_markdown(emails, thread_subject)
 

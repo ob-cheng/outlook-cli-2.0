@@ -1,4 +1,4 @@
-extract-msg>=0.48.0
 markdownify>=0.11.0
 beautifulsoup4>=4.12.0
 pywin32>=306
+rich>=13.0.0
