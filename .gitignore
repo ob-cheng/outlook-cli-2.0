@@ -1,17 +1,11 @@
-# Output directories - contain personal email content
+# Output directories - email exports contain personal content
 markdown/
 output/
-test_output*/
 emails/
 archive/
-Evidence library/
-RTInception/
-Reveal Geo/
-Brand 360/
-christal clarke/
-sales report/
+export/
 
-# Extraction state (contains timestamps specific to user)
+# Extraction state (timestamps specific to user)
 extraction_state.json
 
 # Python
@@ -24,6 +18,12 @@ venv/
 env/
 .venv/
 ENV/
+dist/
+build/
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
 
 # IDE
 .vscode/
@@ -35,9 +35,6 @@ ENV/
 .DS_Store
 Thumbs.db
 
-# Email files (input)
+# Email files
 *.msg
 *.eml
-
-# Claude Code local settings
-.claude/settings.local.json

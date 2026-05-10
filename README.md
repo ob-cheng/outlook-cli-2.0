@@ -1,79 +1,22 @@
 # Outlook CLI 2.0
 
-The agent-friendly Outlook CLI. No Azure setup. No OAuth dance. Just your terminal and Outlook.
+A command line interface for Outlook that works through COM automation instead of the Graph API. You can search emails, send messages, and manage calendar events from your terminal.
 
-**Other tools require Azure app registration, admin approval, and OAuth setup.** We don't. This is for people and agents that need to work with Outlook *right now*, without waiting for IT or infrastructure teams.
+## Why this exists
 
-## Why This Exists
+The other [outlook-cli](https://github.com/mhattingpete/outlook-cli) requires Azure app registration, OAuth setup, and admin approval. At some companies, that takes weeks. At others, it never happens.
 
-There's already an excellent [outlook-cli](https://github.com/mhattingpete/outlook-cli) out there. It uses Microsoft's Graph API. It's well-built.
+This tool talks directly to Outlook on your Windows machine. If you can open Outlook, you can use this. Install it and start working.
 
-But it requires:
-- Azure app registration (your company's IT has to allow it)
-- OAuth setup and approval flow
-- API rate limits
-- Network connectivity (cloud-based)
-- Waiting weeks for enterprise security review
+## What it does
 
-Not every company moves fast. Not every agent can wait.
-
-**This tool** runs locally on your Windows machine. It talks directly to Outlook via COM automation. No approval needed. No infrastructure setup. Just `pip install` and go.
-
-## What This Can Do
-
-Full read/write access to Outlook:
-
-- Search and filter emails across folders
-- Send emails with CC, BCC, attachments
+- Search and filter emails by folder, sender, date range, read status
+- Send emails with CC, BCC, attachments, HTML formatting
 - Reply and forward messages
-- Draft emails for review
-- Export threads to Obsidian markdown
+- Save drafts for review before sending
+- Export email threads to Obsidian markdown
 - List, create, and delete calendar events
-- Works offline, no API rate limits, zero infrastructure overhead
-
-## Use Cases This Enables
-
-**Agents that need to draft and send emails without human intervention:**
-
-```bash
-python outlook.py send \
-  --to client@company.com \
-  --subject "Report ready for review" \
-  --body "$(cat report-summary.txt)"
-```
-
-**Agents that manage your calendar:**
-
-```bash
-# Check what you're doing before scheduling
-python outlook.py cal list --start 2026-05-15 --end 2026-05-20
-
-# Create a meeting slot
-python outlook.py cal create \
-  --subject "Team sync" \
-  --start "2026-05-15 14:00" \
-  --end "2026-05-15 15:00"
-```
-
-**Agents that triage your inbox without you:**
-
-```bash
-# Find urgent stuff
-python outlook.py search --unread --keyword "urgent" \
-  --filter-email boss@company.com
-
-# Forward to someone else
-python outlook.py forward <message-id> \
-  --to delegated@company.com \
-  --body "Can you handle this?"
-```
-
-**Rapid agent iteration (no waiting for approvals):**
-
-- Deploy at 9am
-- Agent works with Outlook immediately
-- No "pending infrastructure review"
-- No "waiting for Azure app approval"
+- Works offline since everything is local
 
 ## Install
 
@@ -83,21 +26,15 @@ cd outlook-cli-2.0
 pip install -r requirements.txt
 ```
 
-Requires:
+You need Windows 10 or 11 with Outlook desktop installed. Python 3.8 or higher.
 
-- Windows 10/11
-- Outlook Classic (desktop app)
-- Python 3.8+
-
-No Azure account. No OAuth flow. No IT approval needed.
-
-## Quick Start
+## Quick start
 
 ```bash
-# What's in your inbox
+# See unread messages
 python outlook.py search --unread
 
-# What you're doing this week
+# What's on your calendar this week
 python outlook.py cal list
 
 # Send an email
@@ -106,35 +43,35 @@ python outlook.py send \
   --subject "Quick question" \
   --body "Can we sync tomorrow?"
 
-# Draft something for review (don't send yet)
+# Save as draft instead of sending
 python outlook.py send \
   --to client@company.com \
   --subject "Project update" \
   --body "Here's where we stand..." \
   --draft
 
-# Export threads to markdown
+# Export recent threads to markdown
 python outlook.py export --output ~/Obsidian/Emails --days 30
 ```
 
 ## Commands
 
-### Search and Display
+### Search
 
 ```bash
-# Default: next 7 days
+# Default shows last 7 days
 python outlook.py search
 
 # Unread only
 python outlook.py search --unread
 
-# From a specific person
+# From specific person
 python outlook.py search --filter-email john@company.com
 
 # With keyword
 python outlook.py search --keyword "meeting" --days 14
 
-# Complex query
+# Combine filters
 python outlook.py search \
   --folder Inbox \
   --unread \
@@ -146,10 +83,10 @@ python outlook.py search \
 python outlook.py search --from-date 2026-05-01 --to-date 2026-05-31
 ```
 
-### Export to Markdown
+### Export to markdown
 
 ```bash
-# Basic
+# Basic export
 python outlook.py export --output ./emails --days 30
 
 # With filters
@@ -163,10 +100,10 @@ python outlook.py export --output ./all \
   --folder Inbox --folder "Sent Items" --folder Archive
 ```
 
-### Send Email
+### Send email
 
 ```bash
-# Basic send
+# Basic
 python outlook.py send \
   --to user@example.com \
   --subject "Update" \
@@ -182,14 +119,14 @@ python outlook.py send \
   --attach report.pdf \
   --attach data.xlsx
 
-# HTML
+# HTML body
 python outlook.py send \
   --to user@example.com \
   --subject "Announcement" \
   --body "<h1>New feature</h1><p>Live now</p>" \
   --html
 
-# Draft (for review before sending)
+# Draft mode
 python outlook.py send \
   --to user@example.com \
   --subject "Draft message" \
@@ -197,13 +134,13 @@ python outlook.py send \
   --draft
 ```
 
-### Reply and Forward
+### Reply and forward
 
 ```bash
 # Reply to sender
 python outlook.py reply <message-id> --body "Thanks!"
 
-# Reply to all
+# Reply all
 python outlook.py reply <message-id> --body "Team, here's my take" --all
 
 # Reply with attachment
@@ -211,7 +148,7 @@ python outlook.py reply <message-id> \
   --body "See attached analysis" \
   --attach analysis.pdf
 
-# Draft reply for review
+# Draft reply
 python outlook.py reply <message-id> \
   --body "My response" \
   --draft
@@ -225,22 +162,22 @@ python outlook.py forward <message-id> \
 ### Calendar
 
 ```bash
-# What's coming
+# List upcoming events
 python outlook.py cal list
 
-# Next month
+# Date range
 python outlook.py cal list --start 2026-05-01 --end 2026-05-31
 
-# Find all standups
+# Filter by subject
 python outlook.py cal list --subject "standup"
 
-# Recurring events
+# Show recurring events
 python outlook.py cal list --recurring
 
-# View details
+# View event details
 python outlook.py cal read <event-id>
 
-# Create a meeting
+# Create event
 python outlook.py cal create \
   --subject "Sync" \
   --start "2026-05-15 14:00" \
@@ -248,7 +185,7 @@ python outlook.py cal create \
   --location "Room A" \
   --body "Quarterly planning"
 
-# Delete
+# Delete event
 python outlook.py cal delete <event-id>
 ```
 
@@ -258,11 +195,11 @@ python outlook.py cal delete <event-id>
 python outlook.py folders
 ```
 
-Lists everything: Inbox, Sent, Archive, custom folders, all of it.
+Lists all folders including Inbox, Sent Items, Archive, and any custom folders.
 
-## Output Format
+## Export format
 
-Export produces clean Obsidian-ready markdown:
+The export produces markdown files with Obsidian frontmatter:
 
 ```markdown
 ---
@@ -286,7 +223,7 @@ tags:
 **From:** Alice Smith  
 **Date:** [[2026-05-08]] 09:15
 
-Here's the email content. Quoted replies stripped. Signatures cleaned. Just the meat.
+Email content here. Quoted replies and signatures are stripped.
 
 ---
 
@@ -295,9 +232,9 @@ Here's the email content. Quoted replies stripped. Signatures cleaned. Just the 
 Your reply here.
 ```
 
-Threads grouped by subject. Each message marked sent/received. Perfect for knowledge bases and AI context.
+Threads are grouped by subject. Each message is marked as sent or received.
 
-## Using with Agents
+## Using with agents
 
 ### Claude Code
 
@@ -314,8 +251,6 @@ python outlook.py send \
 # Check calendar before proposing time
 python outlook.py cal list --start 2026-05-15 --end 2026-05-20
 ```
-
-Claude can run these commands directly. No setup. No waiting.
 
 ### Hermes Agent
 
@@ -341,19 +276,17 @@ Claude can run these commands directly. No setup. No waiting.
 }
 ```
 
-Your agent has full email and calendar access. No Azure. No OAuth. Deploy now.
-
 ### OpenClaw
 
 ```yaml
 actions:
   - name: monitor_inbox
     command: python outlook.py search --unread --folder Inbox
-    schedule: "0 * * * *"  # Hourly
+    schedule: "0 * * * *"
 
   - name: daily_archive
     command: python outlook.py export --output ./archive --days 1
-    schedule: "0 20 * * *"  # 8pm daily
+    schedule: "0 20 * * *"
 
   - name: send_eod_reminder
     command: |
@@ -361,51 +294,21 @@ actions:
         --to team@company.com \
         --subject "EOD: Submit status" \
         --body "End-of-day reminder"
-    schedule: "0 17 * * 1-5"  # 5pm weekdays
+    schedule: "0 17 * * 1-5"
 ```
 
-Automate email workflows without infrastructure overhead.
+## What gets cleaned during export
 
-## What Gets Cleaned
-
-When exporting to markdown, we strip the noise:
-
-**Gone:** Tracking URLs, signature tables, "CAUTION: external email" warnings, quoted replies, tracking pixels.
-
-**Stays:** Actual email content, names in signatures, legitimate tables.
-
-## Why Local? Why COM?
-
-**Local (no cloud):**
-- Works offline
-- No API rate limits
-- No network latency
-- Your emails stay on your machine
-- Zero infrastructure cost
-
-**COM automation (direct to Outlook):**
-- No OAuth flow
-- No app registration
-- No Azure dependency
-- Faster than REST API
-- Deployed and working in minutes
-
-This is why agents can use it immediately. No waiting for approvals, no infrastructure reviews, no "IT will get back to you next quarter."
+The export strips tracking URLs, signature tables, "CAUTION: external email" warnings, quoted reply chains, and tracking pixels. Names in signatures and legitimate tables are preserved.
 
 ## Limitations
 
-- Windows only (uses COM)
-- Requires Outlook Classic desktop app
-- No shared mailbox support (yet)
-
-That's it. Everything else works.
+- Windows only (COM automation)
+- Needs Outlook desktop app installed
+- No shared mailbox support yet
 
 ## License
 
 MIT
-
----
-
-**Deploy this morning. Your agent has email by afternoon.** No Azure. No OAuth. No IT tickets.
 
 [https://github.com/ob-cheng/outlook-cli-2.0](https://github.com/ob-cheng/outlook-cli-2.0)
