@@ -4,9 +4,9 @@ A command line interface for Outlook that works through COM automation instead o
 
 ## Why this exists
 
-The other [outlook-cli](https://github.com/mhattingpete/outlook-cli) requires Azure app registration, OAuth setup, and admin approval. At some companies, that takes weeks. At others, it never happens.
+There's a good [outlook-cli](https://github.com/mhattingpete/outlook-cli) that uses Microsoft's Graph API. It works well if you have Azure app registration set up.
 
-This tool talks directly to Outlook on your Windows machine. If you can open Outlook, you can use this. Install it and start working.
+This one takes a different approach: COM automation on your local Windows machine. If you already have Outlook desktop running, you can use this without any cloud setup. Useful when you need something working quickly or when Azure registration isn't an option.
 
 ## What it does
 
