@@ -1,266 +1,200 @@
 # Outlook CLI 2.0
 
-> The complete command-line interface for Microsoft Outlook — search, view, export, send emails and manage calendar events, all from your terminal.
+Stop clicking through Outlook. Use your terminal instead.
 
-A next-generation CLI that gives you full control over Outlook without touching the UI. Search and filter emails with rich terminal tables, export to Obsidian-flavored markdown, compose and send messages with attachments, manage your calendar, and integrate seamlessly with AI agents like Claude Code, Hermes, and OpenClaw.
+This is a command-line tool for Microsoft Outlook that lets you search, view, send emails and manage your calendar without touching the UI. It's built for people who live in their terminal, folks automating email workflows, and AI agents that need to work with email.
 
-**What's New in 2.0:**
+**Actually works with:**
+- Searching and filtering emails across folders
+- Sending emails with attachments and CC/BCC
+- Replying and forwarding
+- Exporting threads to Obsidian markdown
+- Listing and creating calendar events
+- Integrating into AI agent workflows (Claude Code, Hermes, OpenClaw)
 
-- 🎨 Rich terminal UI with styled tables and panels
-- ✉️ Full email operations: send, reply, forward, draft
-- 📅 Complete calendar management
-- 🔍 Advanced filtering: folders, dates, unread, keywords
-- 🤖 AI agent integration ready
-- 🏗️ Modular service architecture
+## Install
 
-## Highlights
-
-- **Rich Terminal UI** — Styled tables, panels, and formatted output via Rich library
-- **Full Email Operations** — Search, read, send, reply, forward, draft
-- **Calendar Management** — List, create, read, and delete calendar events
-- **Thread Consolidation** — Groups RE:/FW: chains into single markdown files
-- **Smart Filtering** — By person, domain, keyword, date range, unread status, folder
-- **Obsidian Export** — YAML frontmatter, wikilinks, callouts, and tags
-- **Multiple Folders** — Search across Inbox, Sent, Archive, or custom folders
+```bash
+git clone https://github.com/ob-cheng/outlook-cli-2.0.git
+cd outlook-cli-2.0
+pip install -r requirements.txt
+```
 
 ## Quick Start
 
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+# List unread emails from this week
+python outlook.py search --unread --days 7
 
-# Search emails in terminal
-python outlook.py search --folder Inbox --days 7
-
-# Export to Obsidian vault
-python outlook.py export --output "C:\Users\You\Obsidian\Emails" --days 30
+# Search for emails from a specific person
+python outlook.py search --filter-email boss@company.com --days 30
 
 # Send an email
-python outlook.py send --to user@example.com --subject "Hello" --body "Test message"
+python outlook.py send \
+  --to recipient@example.com \
+  --subject "Quick update" \
+  --body "Here's what I've done"
 
-# List upcoming calendar events
+# Export threads to markdown for your Obsidian vault
+python outlook.py export --output ~/Obsidian/Emails --days 30
+
+# Check calendar for the next week
 python outlook.py cal list
 ```
 
 ## Commands
 
-### Email Operations
+### Search and Display
 
-#### Search & View
-
-Display emails in a rich terminal table:
+Find emails and see them in a clean table format:
 
 ```bash
-# Recent emails from Inbox
-python outlook.py search --folder Inbox --days 7
+# Default: next 7 days from Inbox
+python outlook.py search
 
-# Unread messages only
+# Unread only
 python outlook.py search --unread
 
-# Filter by keyword
-python outlook.py search --keyword "project update"
+# Search by person
+python outlook.py search --filter-email john@company.com
 
-# Filter by sender
-python outlook.py search --filter-email boss@company.com
+# Search by keyword
+python outlook.py search --keyword "meeting notes"
 
 # Combine filters
 python outlook.py search --folder Inbox --unread --keyword "urgent" --days 3
 
-# Search and export to markdown
-python outlook.py search --folder Inbox --export ./markdown
+# Custom date range
+python outlook.py search --from-date 2026-05-01 --to-date 2026-05-31
 ```
 
-#### Export to Markdown
+### Export to Markdown
 
-Export emails to Obsidian-flavored markdown:
+Save emails to markdown files for archival or knowledge bases:
 
 ```bash
 # Basic export
 python outlook.py export --output ./emails --days 30
 
 # With filters
-python outlook.py export --output ./emails \
+python outlook.py export --output ./project-emails \
   --filter-email client@vendor.com \
-  --keyword "contract" \
-  --days 90
+  --keyword "contract"
 
-# Date range export
+# Multiple folders at once
 python outlook.py export --output ./archive \
-  --from-date 2026-01-01 --to-date 2026-03-31
-
-# Multiple folders
-python outlook.py export --output ./all-mail \
   --folder Inbox --folder "Sent Items" --folder Archive
 ```
 
-#### Read Single Email
+### Read a Single Email
 
-View email details in the terminal:
+View full details of one message:
 
 ```bash
 python outlook.py read <message-id>
 ```
 
-#### Send Email
+### Send Email
 
-Compose and send new emails:
+Compose and send a message:
 
 ```bash
-# Simple send
+# Basic
 python outlook.py send \
-  --to recipient@example.com \
-  --subject "Project Update" \
-  --body "Here's the latest status..."
+  --to user@example.com \
+  --subject "Your subject here" \
+  --body "Message body"
 
 # With CC, BCC, attachments
 python outlook.py send \
-  --to person1@example.com,person2@example.com \
+  --to person1@example.com \
   --cc manager@example.com \
   --bcc archive@example.com \
-  --subject "Monthly Report" \
-  --body "Please review the attached report." \
-  --attach report.pdf \
-  --attach data.xlsx
+  --subject "Report" \
+  --body "See attached" \
+  --attach report.pdf
+
+# Save as draft instead of sending
+python outlook.py send \
+  --to user@example.com \
+  --subject "Draft message" \
+  --body "Not ready yet" \
+  --draft
 
 # HTML email
 python outlook.py send \
   --to user@example.com \
   --subject "Announcement" \
-  --body "<h1>Important</h1><p>New <b>feature</b> released!</p>" \
+  --body "<h1>Hello</h1><p>New feature live</p>" \
   --html
-
-# Save as draft (don't send)
-python outlook.py send \
-  --to user@example.com \
-  --subject "Draft Message" \
-  --body "Not ready yet..." \
-  --draft
 ```
 
-#### Reply
-
-Reply to an existing email:
+### Reply and Forward
 
 ```bash
 # Reply to sender
-python outlook.py reply <message-id> --body "Thanks for the update!"
+python outlook.py reply <message-id> --body "Thanks for the update"
 
-# Reply all
-python outlook.py reply <message-id> --body "Team, noted" --all
+# Reply to everyone
+python outlook.py reply <message-id> --body "Team, here's my take" --all
 
-# With attachment, save as draft
+# Reply with attachment as draft
 python outlook.py reply <message-id> \
   --body "See attached" \
   --attach response.pdf \
   --draft
-```
 
-#### Forward
-
-Forward an email:
-
-```bash
 # Forward to someone
 python outlook.py forward <message-id> \
   --to colleague@example.com \
-  --body "FYI - see below"
-
-# Forward with additional context
-python outlook.py forward <message-id> \
-  --to team@example.com \
-  --cc manager@example.com \
-  --body "Team, please review this request" \
-  --attach additional-info.pdf
+  --body "FYI on this"
 ```
 
-### Calendar Operations
+### Calendar
 
-#### List Events
-
-Display calendar events in a rich terminal table:
+List events with filters, create new ones, delete old ones:
 
 ```bash
-# Next 7 days (default)
+# What's coming up
 python outlook.py cal list
 
-# Custom date range
+# Next month
 python outlook.py cal list --start 2026-05-01 --end 2026-05-31
 
-# Filter by subject
+# Find all "standup" meetings
 python outlook.py cal list --subject "standup"
-
-# Filter by location
-python outlook.py cal list --location "Conference Room"
-
-# Filter by organizer
-python outlook.py cal list --organizer manager@example.com
-
-# All-day events only
-python outlook.py cal list --all-day
 
 # Recurring events only
 python outlook.py cal list --recurring
-```
 
-#### Read Event Details
-
-View event details including attendees and recurrence:
-
-```bash
+# View event details
 python outlook.py cal read <event-id>
-```
 
-#### Create Event
-
-Schedule a new calendar event:
-
-```bash
-# Simple meeting
+# Create a meeting
 python outlook.py cal create \
-  --subject "Team Standup" \
-  --start "2026-05-12 09:00" \
-  --end "2026-05-12 09:30"
-
-# With all details
-python outlook.py cal create \
-  --subject "Quarterly Review" \
-  --start "2026-05-15 14:00" \
-  --end "2026-05-15 16:00" \
+  --subject "Quick sync" \
+  --start "2026-05-12 14:00" \
+  --end "2026-05-12 15:00" \
   --location "Conference Room A" \
-  --body "Q1 performance review and Q2 planning" \
-  --required alice@example.com,bob@example.com \
-  --optional manager@example.com \
-  --reminder 30
-```
+  --body "Quarterly planning"
 
-#### Delete Event
-
-```bash
+# Delete an event
 python outlook.py cal delete <event-id>
 ```
 
-### Folder Management
+### Folders
+
+See what's available to search:
 
 ```bash
-# List all available folders
 python outlook.py folders
-
-# Search specific folder
-python outlook.py search --folder "Project X"
-
-# Search multiple folders
-python outlook.py search --folder Inbox --folder Archive
 ```
+
+This lists your Inbox, Sent Items, Archive, custom folders, everything.
 
 ## Output Format
 
-Markdown files are named for chronological sorting:
-
-```text
-2026-05-08 1727 - Project Update.md
-```
-
-Each file contains:
+When you export, files look like this:
 
 ```markdown
 ---
@@ -283,66 +217,52 @@ tags:
 ## Message 1 (RECEIVED) ^msg-1
 
 **From:** Alice Smith  
-**Date:** [[2026-05-08]] 09:15  
-#email/received
+**Date:** [[2026-05-08]] 09:15
 
-Here's the update on the project...
+Here's the actual email body, stripped of noise, quoted replies, and signatures.
 
 ---
 
 ## Message 2 (SENT) ^msg-2
 
-**From:** Bob Jones  
-**Date:** [[2026-05-08]] 14:30  
-#email/sent
+**From:** You  
+**Date:** [[2026-05-08]] 14:30
 
-Thanks Alice, looks good...
+Your response.
 ```
 
-## Using with AI Agents
+Threads are grouped by subject (RE:/FW: headers stripped), and each message is marked as sent or received. Perfect for dropping into Obsidian.
+
+## Using with AI
 
 ### Claude Code
 
-Add Outlook CLI to your Claude Code workspace for email and calendar access:
+Add this to your Claude Code commands:
 
 ```bash
-# Search recent emails
-python outlook.py search --folder Inbox --days 3
+# Get context before responding
+python outlook.py search --keyword "ProjectX" --days 7 --export ./context
 
-# Find emails from a specific person
-python outlook.py search --filter-email vendor@company.com --days 30
+# Check what's urgent
+python outlook.py search --unread
 
-# Export project emails for context
-python outlook.py export --output ./context \
-  --keyword "ProjectX" --days 60
-
-# Send status update
-python outlook.py send \
-  --to team@company.com \
-  --subject "Weekly Update" \
-  --body "$(cat weekly-summary.txt)"
-
-# Check calendar
-python outlook.py cal list --start 2026-05-12 --end 2026-05-19
+# Send a follow-up
+python outlook.py send --to client@company.com --subject "Next steps" --body "..."
 ```
 
-**Workflow Example:**
-1. Claude Code searches your emails: `python outlook.py search --keyword "bug report"`
-2. Exports relevant threads: `python outlook.py export --output ./bug-context`
-3. Analyzes markdown files to summarize issues
-4. Drafts response: `python outlook.py send --draft --to reporter@company.com`
+Claude can search your emails, read threads, and draft responses. Just tell it to run these commands.
 
 ### Hermes Agent
 
-Integrate Outlook CLI as a tool in your Hermes agent configuration:
+Configure Hermes to use Outlook as a tool:
 
 ```json
 {
   "tools": [
     {
-      "name": "search_email",
-      "command": "python outlook.py search --folder Inbox --keyword {query} --days {days}",
-      "description": "Search emails by keyword"
+      "name": "search_inbox",
+      "command": "python outlook.py search --keyword {query} --days {days}",
+      "description": "Find emails by keyword"
     },
     {
       "name": "send_email",
@@ -351,184 +271,63 @@ Integrate Outlook CLI as a tool in your Hermes agent configuration:
     },
     {
       "name": "check_calendar",
-      "command": "python outlook.py cal list --start {start_date} --end {end_date}",
-      "description": "List calendar events in date range"
+      "command": "python outlook.py cal list --start {date1} --end {date2}",
+      "description": "List calendar events"
     }
   ]
 }
 ```
 
-**Use Cases:**
-- Agent checks calendar before scheduling meetings
-- Searches emails for context before responding
-- Sends automated status reports
-- Exports email threads for RAG/knowledge base
+Your agent can now check your calendar before scheduling, search for context, and send reports.
 
 ### OpenClaw
 
-Configure OpenClaw to use Outlook CLI for email automation:
+Set up recurring tasks:
 
 ```yaml
 # .openclaw/config.yml
 actions:
-  - name: check_inbox
+  - name: check_inbox_every_hour
     command: python outlook.py search --folder Inbox --unread
-    schedule: "*/15 * * * *"  # Every 15 minutes
-    
-  - name: export_daily_emails
+    schedule: "0 * * * *"
+
+  - name: daily_email_archive
     command: python outlook.py export --output ./archive --days 1
-    schedule: "0 20 * * *"  # 8 PM daily
-    
-  - name: send_reminder
+    schedule: "0 20 * * *"
+
+  - name: send_eod_reminder
     command: |
       python outlook.py send \
         --to team@company.com \
-        --subject "EOD Reminder" \
-        --body "Please submit your status updates"
-    schedule: "0 17 * * 1-5"  # 5 PM weekdays
+        --subject "EOD reminder" \
+        --body "Submit your status updates"
+    schedule: "0 17 * * 1-5"
 ```
 
-**Automation Examples:**
-- Monitor inbox for urgent emails
-- Daily email archival to markdown
-- Scheduled reminder emails
-- Calendar sync to external systems
+## What Gets Cleaned
 
-## CLI Reference
+When exporting to markdown, we remove the noise:
 
-### Search/Export Options
+**Gone:** SafeLinks tracking URLs, signature tables, "CAUTION: external email" warnings, quoted replies, tracking pixels, empty cells, random HTML junk.
 
-| Option              | Short | Description                                   |
-| ------------------- | ----- | --------------------------------------------- |
-| `--folder`          | `-F`  | Folder to search (can specify multiple)       |
-| `--days`            | `-d`  | Days to look back (default: 7)                |
-| `--from-date`       |       | Start date (YYYY-MM-DD)                       |
-| `--to-date`         |       | End date (YYYY-MM-DD)                         |
-| `--unread`          | `-u`  | Only unread messages                          |
-| `--filter-email`    | `-f`  | Email address to filter (can specify multiple)|
-| `--filter-domain`   | `-D`  | Domain to filter (can specify multiple)       |
-| `--keyword`         | `-k`  | Keyword in subject/body                       |
+**Stays:** The actual email content, sender names in signatures, legitimate tables.
 
-### Send/Reply/Forward Options
+## What You Need
 
-| Option         | Short | Description                             |
-| -------------- | ----- | --------------------------------------- |
-| `--to`         | `-t`  | Recipient(s) (comma-separated)          |
-| `--subject`    | `-s`  | Email subject                           |
-| `--body`       | `-b`  | Email body                              |
-| `--cc`         |       | CC recipient(s) (comma-separated)       |
-| `--bcc`        |       | BCC recipient(s) (comma-separated)      |
-| `--attach`     | `-a`  | File to attach (can specify multiple)   |
-| `--html`       |       | Body is HTML format                     |
-| `--draft`      |       | Save as draft instead of sending        |
-| `--all`        |       | Reply all (reply command only)          |
+- Windows 10 or 11
+- Outlook Classic (the desktop app, not "new Outlook")
+- Python 3.8 or higher
 
-### Calendar Options
+That's it. No internet required. Works offline.
 
-| Option         | Short | Description                             |
-| -------------- | ----- | --------------------------------------- |
-| `--start`      |       | Start date (YYYY-MM-DD)                 |
-| `--end`        |       | End date (YYYY-MM-DD)                   |
-| `--subject`    | `-s`  | Event subject                           |
-| `--location`   | `-l`  | Event location                          |
-| `--body`       | `-b`  | Event description                       |
-| `--required`   |       | Required attendees (comma-separated)    |
-| `--optional`   |       | Optional attendees (comma-separated)    |
-| `--reminder`   |       | Reminder minutes before event           |
-| `--organizer`  |       | Filter by organizer email               |
-| `--all-day`    |       | All-day events only                     |
-| `--recurring`  |       | Recurring events only                   |
+## Coming From 1.0?
 
-## Architecture
+The old `outlook_to_markdown.py` script is still there, but this is better. Here's the translation:
 
-```text
-outlook_emails/
-├── core/
-│   ├── connection.py    # Outlook COM connection
-│   ├── models.py        # Email dataclass
-│   └── folders.py       # Folder management
-├── services/
-│   ├── search.py        # Email search/filtering
-│   ├── viewer.py        # Terminal display (Rich)
-│   ├── export.py        # Markdown conversion
-│   ├── compose.py       # Send/reply/forward
-│   └── calendar.py      # Calendar operations
-└── utils/
-    └── formatting.py    # Parsing utilities
-```
+**Old:** `python outlook_to_markdown.py --full --days 30 --output ./emails`  
+**New:** `python outlook.py export --output ./emails --days 30`
 
-**Service Separation:**
-
-- `SearchService` — Returns `list[Email]` objects from Outlook
-- `ViewerService` — Displays emails/events in styled terminal tables
-- `ExportService` — Converts emails to Obsidian markdown files
-- `ComposeService` — Sends, replies, forwards emails
-- `CalendarService` — Manages calendar events
-
-## What Gets Cleaned (Export)
-
-The exporter removes noise while preserving content:
-
-- **Removed:** SafeLinks URLs, signature tables, contact info blocks, social links, tracking pixels, empty table rows, external email warnings, quoted replies
-- **Preserved:** Message content, sender names, legitimate data tables, attachments metadata
-
-## Requirements
-
-- **Windows 10/11**
-- **Outlook Classic** (desktop app, not "new Outlook")
-- **Python 3.8+**
-- Dependencies: `pywin32`, `markdownify`, `beautifulsoup4`, `rich`
-
-## Installation
-
-```bash
-git clone https://github.com/YOUR_USERNAME/outlook-cli-2.0.git
-cd outlook-cli-2.0
-pip install -r requirements.txt
-```
-
-Or install dependencies directly:
-
-```bash
-pip install pywin32 markdownify beautifulsoup4 rich
-```
-
-## Use Cases
-
-| Scenario                   | Command                                                        |
-| -------------------------- | -------------------------------------------------------------- |
-| Archive vendor emails      | `export --filter-domain "vendor.com" -o vendor/`               |
-| Project documentation      | `export --keyword "ProjectX" -o projectx/`                     |
-| Team correspondence        | `export --filter-email "alice@co.com,bob@co.com" -o team/`     |
-| AI/RAG pipeline            | `export` for clean markdown embeddings                         |
-| Terminal email triage      | `search --unread --folder Inbox`                               |
-| Automated status emails    | `send --to team@co.com --subject "Status" --body "..."`        |
-| Calendar-aware scheduling  | `cal list --start 2026-05-15 --end 2026-05-20`                 |
-| Send with AI-generated msg | `send --to client@co.com --body "$(cat ai-response.txt)"`      |
-
-## Upgrading from 1.0
-
-If you're coming from the original `outlook_to_markdown.py` script:
-
-**Old (v1.0):**
-
-```bash
-python outlook_to_markdown.py --full --days 30 --output ./emails
-```
-
-**New (v2.0):**
-
-```bash
-python outlook.py export --output ./emails --days 30
-```
-
-The v1.0 script (`outlook_to_markdown.py`) is still available for backward compatibility but is no longer maintained. Migrate to the new CLI for access to terminal viewing, sending, and calendar features.
-
-## Limitations
-
-- Windows only (uses COM automation via `pywin32`)
-- Requires Outlook Classic desktop app
-- Calendar recurring instances may be slow on large calendars
+See CHANGELOG.md for what changed.
 
 ## License
 
