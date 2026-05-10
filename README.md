@@ -21,25 +21,15 @@ Not every company moves fast. Not every agent can wait.
 
 ## What This Can Do
 
-| Feature | Outlook CLI 2.0 | Other outlook-cli | v1.0 |
-| --- | --- | --- | --- |
-| **Search emails** | ✅ | ✅ | ✅ |
-| **View in terminal** | ✅ | ✅ | ❌ |
-| **Send emails** | ✅ | ❌ | ❌ |
-| **Reply/forward** | ✅ | ❌ | ❌ |
-| **Create drafts** | ✅ | ❌ | ❌ |
-| **List calendar** | ✅ | ✅ | ❌ |
-| **Create events** | ✅ | ❌ | ❌ |
-| **Delete events** | ✅ | ❌ | ❌ |
-| **Export to markdown** | ✅ | ❌ | ✅ |
-| **Attachments** | ✅ | ❌ | ❌ |
-| **Multiple folders** | ✅ | ✅ | ❌ (Inbox + Sent only) |
-| **Advanced filtering** | ✅ | ✅ | ✅ |
-| **Works offline** | ✅ | ❌ | ✅ |
-| **Zero setup** | ✅ | ❌ | ✅ |
-| **Agent-ready** | ✅ | ⚠️ (needs config) | ❌ |
+Full read/write access to Outlook:
 
-The big gaps: Other tools are read-only. v1.0 can't send. We do both. And we do it without asking permission from corporate infrastructure.
+- Search and filter emails across folders
+- Send emails with CC, BCC, attachments
+- Reply and forward messages
+- Draft emails for review
+- Export threads to Obsidian markdown
+- List, create, and delete calendar events
+- Works offline, no API rate limits, zero infrastructure overhead
 
 ## Use Cases This Enables
 
@@ -383,33 +373,6 @@ When exporting to markdown, we strip the noise:
 **Gone:** Tracking URLs, signature tables, "CAUTION: external email" warnings, quoted replies, tracking pixels.
 
 **Stays:** Actual email content, names in signatures, legitimate tables.
-
-## v1.0 vs v2.0
-
-v1.0 was email-to-markdown exporter. v2.0 is a full Outlook interface.
-
-| | v1.0 | v2.0 |
-| --- | --- | --- |
-| Export to markdown | ✅ | ✅ |
-| Search emails | ✅ | ✅ |
-| View in terminal | ❌ | ✅ |
-| Send emails | ❌ | ✅ |
-| Reply/forward | ❌ | ✅ |
-| Create calendar events | ❌ | ✅ |
-| Delete calendar events | ❌ | ✅ |
-| Multiple folders | ❌ | ✅ |
-| Works with agents | ⚠️ | ✅ |
-
-```bash
-# Old v1.0
-python outlook_to_markdown.py --full --days 30 --output ./emails
-
-# New v2.0
-python outlook.py export --output ./emails --days 30
-# Plus everything else
-python outlook.py send --to user@example.com --subject "Hello" --body "..."
-python outlook.py cal create --subject "Meeting" --start "2026-05-15 14:00" --end "2026-05-15 15:00"
-```
 
 ## Why Local? Why COM?
 
