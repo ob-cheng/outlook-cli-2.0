@@ -56,13 +56,17 @@ python outlook.py export --output ~/Obsidian/Emails --days 30
 
 ## Commands
 
-### Read single email
+### Read emails
 
 ```bash
+# Read single email
 python outlook.py read <message-id>
+
+# Read multiple emails
+python outlook.py read <id1> <id2> <id3>
 ```
 
-Shows the full content of a specific email by its message ID.
+Shows the full content of one or more emails by their message IDs. You can copy IDs from search results and read several at once.
 
 ### Search
 

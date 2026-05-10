@@ -86,11 +86,12 @@ def create_parser() -> argparse.ArgumentParser:
     # =========================================================================
     read_parser = subparsers.add_parser(
         'read',
-        help='Read a single email by message ID',
+        help='Read emails by message ID',
     )
     read_parser.add_argument(
-        'message_id',
-        help='The message ID (EntryID) to read',
+        'message_ids',
+        nargs='+',
+        help='One or more message IDs (EntryID) to read',
     )
 
     # =========================================================================
@@ -457,14 +458,26 @@ def cmd_read(args) -> int:
     _, namespace = connect_to_outlook()
 
     search = SearchService(namespace)
-    email = search.get_message_by_id(args.message_id)
-
-    if not email:
-        print(f"Message not found: {args.message_id}")
-        return 1
-
     viewer = ViewerService()
-    viewer.print_email_detail(email)
+
+    not_found = []
+    for i, message_id in enumerate(args.message_ids):
+        email = search.get_message_by_id(message_id)
+
+        if not email:
+            not_found.append(message_id)
+            continue
+
+        if i > 0:
+            print("\n" + "=" * 80 + "\n")
+
+        viewer.print_email_detail(email)
+
+    if not_found:
+        print(f"\nMessages not found: {len(not_found)}")
+        for mid in not_found:
+            print(f"  - {mid}")
+        return 1
 
     return 0
 

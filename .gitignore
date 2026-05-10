@@ -38,3 +38,4 @@ Thumbs.db
 # Email files
 *.msg
 *.eml
+.claude/
