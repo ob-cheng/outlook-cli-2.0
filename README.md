@@ -1,6 +1,6 @@
 # Outlook CLI 2.0
 
-A command line interface for Outlook that works through COM automation instead of the Graph API. You can search emails, send messages, and manage calendar events from your terminal.
+A Python command-line interface (CLI) for Microsoft Outlook automation on Windows using COM automation. Search emails, send messages, manage calendar events, and export to Obsidian markdown - all from your terminal without Graph API or Azure setup.
 
 ## Why this exists
 
@@ -357,6 +357,12 @@ Your reply here.
 ```
 
 Threads are grouped by subject. Each message is marked as sent or received. Tracking URLs, signature tables, "CAUTION: external email" warnings, and quoted reply chains are stripped.
+
+## Documentation
+
+- [Examples & Use Cases](docs/EXAMPLES.md)
+- [Comparison with Graph API & other tools](docs/COMPARISON.md)
+- [Skill Definition](SKILL.md)
 
 ## Limitations
 
