@@ -20,13 +20,27 @@ This one takes a different approach: COM automation on your local Windows machin
 
 ## Install
 
+**One-liner (auto-installs AI agent skills):**
+
+```powershell
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/ob-cheng/outlook-cli-2.0/main/install.ps1 | iex
+```
+
+```bash
+# macOS/Linux (for WSL or development)
+curl -fsSL https://raw.githubusercontent.com/ob-cheng/outlook-cli-2.0/main/install.sh | bash
+```
+
+**Manual install:**
+
 ```bash
 git clone https://github.com/ob-cheng/outlook-cli-2.0.git
 cd outlook-cli-2.0
 pip install -r requirements.txt
 ```
 
-You need Windows 10 or 11 with Outlook desktop installed. Python 3.8 or higher.
+Requirements: Windows 10/11 with Outlook desktop installed, Python 3.8+
 
 ## Quick start
 
@@ -280,6 +294,42 @@ Your reply here.
 ```
 
 Threads are grouped by subject. Each message is marked as sent or received.
+
+## JSON output
+
+All commands support `--json` for structured, parseable output:
+
+```bash
+python outlook.py search --unread --json
+```
+
+Returns:
+
+```json
+{
+  "success": true,
+  "count": 3,
+  "emails": [
+    {
+      "message_id": "00000000ABC...",
+      "subject": "Meeting tomorrow",
+      "sender_clean": "Alice Smith",
+      "date": "2026-05-11T09:30:00",
+      "is_read": false
+    }
+  ]
+}
+```
+
+Errors return:
+
+```json
+{
+  "success": false,
+  "error": "Message not found",
+  "code": "not_found"
+}
+```
 
 ## Using with agents
 

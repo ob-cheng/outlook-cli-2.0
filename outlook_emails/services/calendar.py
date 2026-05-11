@@ -141,6 +141,26 @@ class CalendarEvent:
             reminder_minutes=reminder_minutes,
         )
 
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        return {
+            'subject': self.subject,
+            'start': self.start.isoformat() if self.start else None,
+            'end': self.end.isoformat() if self.end else None,
+            'location': self.location,
+            'body': self.body,
+            'organizer': self.organizer,
+            'required_attendees': self.required_attendees,
+            'optional_attendees': self.optional_attendees,
+            'is_all_day': self.is_all_day,
+            'is_recurring': self.is_recurring,
+            'recurrence_pattern': self.recurrence_pattern,
+            'entry_id': self.entry_id,
+            'categories': self.categories,
+            'importance': self.importance,
+            'reminder_minutes': self.reminder_minutes,
+        }
+
     @staticmethod
     def _format_recurrence(rec_pattern) -> str:
         """Format recurrence pattern to human-readable string."""

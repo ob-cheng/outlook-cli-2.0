@@ -1,6 +1,7 @@
 """Command-line interface for Outlook Email CLI."""
 
 import argparse
+import json
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -16,6 +17,21 @@ from .utils.formatting import parse_date
 
 
 DEFAULT_LOOKBACK_DAYS = 7
+
+
+def _output_json(data: dict) -> None:
+    """Output data as formatted JSON."""
+    print(json.dumps(data, indent=2, ensure_ascii=False))
+
+
+def _json_error(error: str, code: str = "error") -> dict:
+    """Create a JSON error response."""
+    return {"success": False, "error": error, "code": code}
+
+
+def _json_success(data: dict) -> dict:
+    """Create a JSON success response."""
+    return {"success": True, **data}
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -35,6 +51,7 @@ def create_parser() -> argparse.ArgumentParser:
         'folders',
         help='List all available Outlook folders',
     )
+    folders_parser.add_argument('--json', action='store_true', help='Output as JSON')
 
     # =========================================================================
     # search command
@@ -55,6 +72,7 @@ def create_parser() -> argparse.ArgumentParser:
         action='store_true',
         help='Skip terminal display (useful with --export)',
     )
+    search_parser.add_argument('--json', action='store_true', help='Output as JSON')
 
     # =========================================================================
     # export command
@@ -80,6 +98,7 @@ def create_parser() -> argparse.ArgumentParser:
         action='store_true',
         help='Skip files that already exist',
     )
+    export_parser.add_argument('--json', action='store_true', help='Output as JSON')
 
     # =========================================================================
     # read command
@@ -93,6 +112,7 @@ def create_parser() -> argparse.ArgumentParser:
         nargs='+',
         help='One or more message IDs (EntryID) to read',
     )
+    read_parser.add_argument('--json', action='store_true', help='Output as JSON')
 
     # =========================================================================
     # send command
@@ -145,6 +165,7 @@ def create_parser() -> argparse.ArgumentParser:
         action='store_true',
         help='Save as draft instead of sending',
     )
+    send_parser.add_argument('--json', action='store_true', help='Output as JSON')
 
     # =========================================================================
     # reply command
@@ -184,6 +205,7 @@ def create_parser() -> argparse.ArgumentParser:
         action='store_true',
         help='Save as draft instead of sending',
     )
+    reply_parser.add_argument('--json', action='store_true', help='Output as JSON')
 
     # =========================================================================
     # forward command
@@ -233,6 +255,7 @@ def create_parser() -> argparse.ArgumentParser:
         action='store_true',
         help='Save as draft instead of sending',
     )
+    forward_parser.add_argument('--json', action='store_true', help='Output as JSON')
 
     # =========================================================================
     # cal command (calendar)
@@ -249,10 +272,12 @@ def create_parser() -> argparse.ArgumentParser:
     cal_list.add_argument('--organizer', type=str, help='Filter by organizer email')
     cal_list.add_argument('--all-day', action='store_true', help='All-day events only')
     cal_list.add_argument('--recurring', action='store_true', help='Recurring events only')
+    cal_list.add_argument('--json', action='store_true', help='Output as JSON')
 
     # cal read
     cal_read = cal_subparsers.add_parser('read', help='Read event details')
     cal_read.add_argument('event_id', help='Event ID (EntryID)')
+    cal_read.add_argument('--json', action='store_true', help='Output as JSON')
 
     # cal create
     cal_create = cal_subparsers.add_parser('create', help='Create a new event')
@@ -265,10 +290,12 @@ def create_parser() -> argparse.ArgumentParser:
     cal_create.add_argument('--optional', type=str, help='Optional attendees (comma-separated)')
     cal_create.add_argument('--reminder', type=int, help='Reminder minutes before event (default: 15)')
     cal_create.add_argument('--no-reminder', action='store_true', help='No reminder')
+    cal_create.add_argument('--json', action='store_true', help='Output as JSON')
 
     # cal delete
     cal_delete = cal_subparsers.add_parser('delete', help='Delete an event')
     cal_delete.add_argument('event_id', help='Event ID (EntryID)')
+    cal_delete.add_argument('--json', action='store_true', help='Output as JSON')
 
     return parser
 
@@ -339,39 +366,50 @@ def _get_date_range(args) -> tuple[datetime | None, datetime | None]:
 
 def cmd_folders(args) -> int:
     """Handle 'folders' command."""
-    print("Connecting to Outlook...")
+    from .core.folders import list_all_folders
+
+    if not getattr(args, 'json', False):
+        print("Connecting to Outlook...")
     _, namespace = connect_to_outlook()
 
-    viewer = ViewerService()
-    viewer.print_folders(namespace)
+    folders = list_all_folders(namespace)
 
-    print("\nUse: outlook search --folder <name>")
+    if getattr(args, 'json', False):
+        _output_json(_json_success({"folders": folders}))
+    else:
+        viewer = ViewerService()
+        viewer.print_folders(namespace)
+        print("\nUse: outlook search --folder <name>")
+
     return 0
 
 
 def cmd_search(args) -> int:
     """Handle 'search' command."""
-    print("Connecting to Outlook...")
+    json_mode = getattr(args, 'json', False)
+
+    if not json_mode:
+        print("Connecting to Outlook...")
     _, namespace = connect_to_outlook()
 
     since_date, until_date = _get_date_range(args)
 
-    # Print search parameters
-    print(f"\nSearching emails...")
-    if since_date:
-        print(f"  From: {since_date.strftime('%Y-%m-%d')}")
-    if until_date:
-        print(f"  To: {until_date.strftime('%Y-%m-%d')}")
-    if args.folder:
-        print(f"  Folders: {', '.join(args.folder)}")
-    if args.unread:
-        print(f"  Unread only: Yes")
-    if args.filter_email:
-        print(f"  Filter emails: {', '.join(args.filter_email)}")
-    if args.filter_domain:
-        print(f"  Filter domains: {', '.join(args.filter_domain)}")
-    if args.keyword:
-        print(f"  Keyword: {args.keyword}")
+    if not json_mode:
+        print(f"\nSearching emails...")
+        if since_date:
+            print(f"  From: {since_date.strftime('%Y-%m-%d')}")
+        if until_date:
+            print(f"  To: {until_date.strftime('%Y-%m-%d')}")
+        if args.folder:
+            print(f"  Folders: {', '.join(args.folder)}")
+        if args.unread:
+            print(f"  Unread only: Yes")
+        if args.filter_email:
+            print(f"  Filter emails: {', '.join(args.filter_email)}")
+        if args.filter_domain:
+            print(f"  Filter domains: {', '.join(args.filter_domain)}")
+        if args.keyword:
+            print(f"  Keyword: {args.keyword}")
 
     # Search
     search = SearchService(namespace)
@@ -384,6 +422,13 @@ def cmd_search(args) -> int:
         filter_domains=args.filter_domain,
         filter_keyword=args.keyword,
     )
+
+    if json_mode:
+        _output_json(_json_success({
+            "count": len(emails),
+            "emails": [e.to_dict(include_body=False) for e in emails],
+        }))
+        return 0
 
     print(f"\nFound {len(emails)} email(s)")
 
@@ -405,17 +450,20 @@ def cmd_search(args) -> int:
 
 def cmd_export(args) -> int:
     """Handle 'export' command."""
-    print("Connecting to Outlook...")
+    json_mode = getattr(args, 'json', False)
+
+    if not json_mode:
+        print("Connecting to Outlook...")
     _, namespace = connect_to_outlook()
 
     since_date, until_date = _get_date_range(args)
 
-    # Print parameters
-    print(f"\nExporting emails to: {args.output}")
-    if since_date:
-        print(f"  From: {since_date.strftime('%Y-%m-%d')}")
-    if until_date:
-        print(f"  To: {until_date.strftime('%Y-%m-%d')}")
+    if not json_mode:
+        print(f"\nExporting emails to: {args.output}")
+        if since_date:
+            print(f"  From: {since_date.strftime('%Y-%m-%d')}")
+        if until_date:
+            print(f"  To: {until_date.strftime('%Y-%m-%d')}")
 
     # Search
     search = SearchService(namespace)
@@ -429,10 +477,19 @@ def cmd_export(args) -> int:
         filter_keyword=args.keyword,
     )
 
-    print(f"Found {len(emails)} email(s)")
+    if not json_mode:
+        print(f"Found {len(emails)} email(s)")
 
     if not emails:
-        print("No emails to export.")
+        if json_mode:
+            _output_json(_json_success({
+                "emails_found": 0,
+                "files_created": 0,
+                "files_skipped": 0,
+                "output_directory": args.output,
+            }))
+        else:
+            print("No emails to export.")
         return 0
 
     # Export
@@ -443,34 +500,57 @@ def cmd_export(args) -> int:
         no_overwrite=args.no_overwrite,
     )
 
-    print(f"\nExport complete:")
-    print(f"  Files created: {result['files_created']}")
-    if result['files_skipped'] > 0:
-        print(f"  Files skipped: {result['files_skipped']}")
-    print(f"  Output directory: {args.output}")
+    if json_mode:
+        _output_json(_json_success({
+            "emails_found": len(emails),
+            "files_created": result['files_created'],
+            "files_skipped": result.get('files_skipped', 0),
+            "output_directory": args.output,
+        }))
+    else:
+        print(f"\nExport complete:")
+        print(f"  Files created: {result['files_created']}")
+        if result['files_skipped'] > 0:
+            print(f"  Files skipped: {result['files_skipped']}")
+        print(f"  Output directory: {args.output}")
 
     return 0
 
 
 def cmd_read(args) -> int:
     """Handle 'read' command."""
-    print("Connecting to Outlook...")
+    json_mode = getattr(args, 'json', False)
+
+    if not json_mode:
+        print("Connecting to Outlook...")
     _, namespace = connect_to_outlook()
 
     search = SearchService(namespace)
-    viewer = ViewerService()
 
+    emails = []
     not_found = []
-    for i, message_id in enumerate(args.message_ids):
+    for message_id in args.message_ids:
         email = search.get_message_by_id(message_id)
-
-        if not email:
+        if email:
+            emails.append(email)
+        else:
             not_found.append(message_id)
-            continue
 
+    if json_mode:
+        if not_found and not emails:
+            _output_json(_json_error(f"Messages not found: {', '.join(not_found)}", "not_found"))
+            return 1
+        _output_json(_json_success({
+            "count": len(emails),
+            "emails": [e.to_dict(include_body=True) for e in emails],
+            "not_found": not_found if not_found else None,
+        }))
+        return 0 if not not_found else 1
+
+    viewer = ViewerService()
+    for i, email in enumerate(emails):
         if i > 0:
             print("\n" + "=" * 80 + "\n")
-
         viewer.print_email_detail(email)
 
     if not_found:
@@ -484,7 +564,10 @@ def cmd_read(args) -> int:
 
 def cmd_send(args) -> int:
     """Handle 'send' command."""
-    print("Connecting to Outlook...")
+    json_mode = getattr(args, 'json', False)
+
+    if not json_mode:
+        print("Connecting to Outlook...")
     _, namespace = connect_to_outlook()
 
     # Parse recipients
@@ -505,6 +588,13 @@ def cmd_send(args) -> int:
         send_immediately=not args.draft,
     )
 
+    if json_mode:
+        if success:
+            _output_json(_json_success({"message": message, "draft": args.draft}))
+        else:
+            _output_json(_json_error(message, "send_failed"))
+        return 0 if success else 1
+
     if success:
         print(f"✓ {message}")
         return 0
@@ -515,7 +605,10 @@ def cmd_send(args) -> int:
 
 def cmd_reply(args) -> int:
     """Handle 'reply' command."""
-    print("Connecting to Outlook...")
+    json_mode = getattr(args, 'json', False)
+
+    if not json_mode:
+        print("Connecting to Outlook...")
     _, namespace = connect_to_outlook()
 
     compose = ComposeService(namespace)
@@ -528,6 +621,13 @@ def cmd_reply(args) -> int:
         send_immediately=not args.draft,
     )
 
+    if json_mode:
+        if success:
+            _output_json(_json_success({"message": message, "reply_all": args.all, "draft": args.draft}))
+        else:
+            _output_json(_json_error(message, "reply_failed"))
+        return 0 if success else 1
+
     if success:
         print(f"✓ {message}")
         return 0
@@ -538,7 +638,10 @@ def cmd_reply(args) -> int:
 
 def cmd_forward(args) -> int:
     """Handle 'forward' command."""
-    print("Connecting to Outlook...")
+    json_mode = getattr(args, 'json', False)
+
+    if not json_mode:
+        print("Connecting to Outlook...")
     _, namespace = connect_to_outlook()
 
     # Parse recipients
@@ -557,6 +660,13 @@ def cmd_forward(args) -> int:
         html=args.html,
         send_immediately=not args.draft,
     )
+
+    if json_mode:
+        if success:
+            _output_json(_json_success({"message": message, "to": to, "draft": args.draft}))
+        else:
+            _output_json(_json_error(message, "forward_failed"))
+        return 0 if success else 1
 
     if success:
         print(f"✓ {message}")
@@ -577,24 +687,26 @@ def cmd_cal(args) -> int:
         print("Usage: outlook cal {list,read,create,delete}")
         return 1
 
-    print("Connecting to Outlook...")
+    json_mode = getattr(args, 'json', False)
+
+    if not json_mode:
+        print("Connecting to Outlook...")
     _, namespace = connect_to_outlook()
 
     calendar = CalendarService(namespace)
-    viewer = ViewerService()
 
     if args.cal_command == 'list':
-        # Parse dates
         start_date = parse_date(args.start) if args.start else None
         end_date = parse_date(args.end) if args.end else None
         if end_date:
             end_date = end_date.replace(hour=23, minute=59, second=59)
 
-        print("\nSearching calendar events...")
-        if start_date:
-            print(f"  From: {start_date.strftime('%Y-%m-%d')}")
-        if end_date:
-            print(f"  To: {end_date.strftime('%Y-%m-%d')}")
+        if not json_mode:
+            print("\nSearching calendar events...")
+            if start_date:
+                print(f"  From: {start_date.strftime('%Y-%m-%d')}")
+            if end_date:
+                print(f"  To: {end_date.strftime('%Y-%m-%d')}")
 
         events = calendar.list_events(
             start_date=start_date,
@@ -606,15 +718,30 @@ def cmd_cal(args) -> int:
             recurring_only=args.recurring,
         )
 
-        print(f"\nFound {len(events)} event(s)\n")
-        viewer.print_events_table(events)
+        if json_mode:
+            _output_json(_json_success({
+                "count": len(events),
+                "events": [e.to_dict() for e in events],
+            }))
+        else:
+            print(f"\nFound {len(events)} event(s)\n")
+            viewer = ViewerService()
+            viewer.print_events_table(events)
 
     elif args.cal_command == 'read':
         event = calendar.get_event(args.event_id)
         if not event:
-            print(f"Event not found: {args.event_id}")
+            if json_mode:
+                _output_json(_json_error(f"Event not found: {args.event_id}", "not_found"))
+            else:
+                print(f"Event not found: {args.event_id}")
             return 1
-        viewer.print_event_detail(event)
+
+        if json_mode:
+            _output_json(_json_success({"event": event.to_dict()}))
+        else:
+            viewer = ViewerService()
+            viewer.print_event_detail(event)
 
     elif args.cal_command == 'create':
         start = _parse_datetime(args.start)
@@ -636,6 +763,13 @@ def cmd_cal(args) -> int:
             reminder_minutes=reminder,
         )
 
+        if json_mode:
+            if success:
+                _output_json(_json_success({"event_id": message, "subject": args.subject}))
+            else:
+                _output_json(_json_error(message, "create_failed"))
+            return 0 if success else 1
+
         if success:
             print(f"✓ Event created (ID: {message})")
             return 0
@@ -645,6 +779,14 @@ def cmd_cal(args) -> int:
 
     elif args.cal_command == 'delete':
         success, message = calendar.delete_event(args.event_id)
+
+        if json_mode:
+            if success:
+                _output_json(_json_success({"message": message}))
+            else:
+                _output_json(_json_error(message, "delete_failed"))
+            return 0 if success else 1
+
         if success:
             print(f"✓ {message}")
             return 0

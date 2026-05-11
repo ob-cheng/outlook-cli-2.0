@@ -149,25 +149,25 @@ class Email:
             message_id=message_id,
         )
 
-    def to_dict(self) -> dict:
-        """Convert to dictionary."""
-        return {
+    def to_dict(self, include_body: bool = True) -> dict:
+        """Convert to dictionary for JSON serialization."""
+        result = {
+            'message_id': self.message_id,
             'subject': self.subject,
             'sender': self.sender,
             'sender_clean': self.sender_clean,
-            'sender_domain': self.sender_domain,
             'sender_smtp': self.sender_smtp,
             'to': self.to,
-            'to_names': self.to_names,
             'to_emails': self.to_emails,
             'cc': self.cc,
             'cc_emails': self.cc_emails,
-            'date': self.date,
-            'html_body': self.html_body,
-            'text_body': self.text_body,
+            'date': self.date.isoformat() if self.date else None,
             'is_sent': self.is_sent,
             'is_read': self.is_read,
             'importance': self.importance,
             'has_attachments': self.has_attachments,
-            'message_id': self.message_id,
         }
+        if include_body:
+            result['text_body'] = self.text_body
+            result['html_body'] = self.html_body
+        return result
