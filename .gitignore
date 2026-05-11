@@ -4,6 +4,7 @@ output/
 emails/
 archive/
 export/
+exports/
 
 # Extraction state (timestamps specific to user)
 extraction_state.json
