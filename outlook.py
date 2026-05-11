@@ -16,7 +16,7 @@ Full documentation: https://github.com/YOUR_USERNAME/outlook-cli-2.0
 """
 
 import sys
-from outlook_emails.cli import main
+from outlook_cli.cli import main
 
 if __name__ == '__main__':
     sys.exit(main())

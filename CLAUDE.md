@@ -27,7 +27,7 @@ Obsidian vault: `~/Obsidian/Emails`
 ## Architecture
 
 - `outlook.py` - Entry point
-- `outlook_emails/cli.py` - CLI argument parsing
-- `outlook_emails/services/` - Business logic (search, export, compose, calendar, viewer)
-- `outlook_emails/core/` - Connection, models, folder utilities
-- `outlook_emails/utils/` - Formatting helpers
+- `outlook_cli/cli.py` - CLI argument parsing
+- `outlook_cli/services/` - Business logic (search, export, compose, calendar, viewer)
+- `outlook_cli/core/` - Connection, models, folder utilities
+- `outlook_cli/utils/` - Formatting helpers
