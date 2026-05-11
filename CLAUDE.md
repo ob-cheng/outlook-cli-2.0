@@ -16,14 +16,6 @@ Command-line interface for Microsoft Outlook using COM automation.
 | Create event | `python outlook.py cal create --subject X --start Y --end Z` |
 | List folders | `python outlook.py folders` |
 
-## Working directory
-
-Always run from: `./`
-
-## Default output
-
-Obsidian vault: `~/Obsidian/Emails`
-
 ## Architecture
 
 - `outlook.py` - Entry point
