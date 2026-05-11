@@ -272,6 +272,8 @@ This tool integrates with AI agents via **direct CLI calls** (not MCP server). T
 - Cursor (`~/.cursor/skills/`)
 - Windsurf (`~/.windsurf/skills/`)
 - GitHub Copilot (`~/.copilot/skills/`)
+- Hermes (`~/.hermes/skills/`)
+- OpenClaw (`~/.openclaw/skills/`)
 
 Agents invoke commands directly via shell. All commands support `--json` for structured output that's easy to parse.
 
