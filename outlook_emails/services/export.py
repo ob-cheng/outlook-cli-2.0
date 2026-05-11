@@ -1,6 +1,7 @@
 """Markdown export service."""
 
 import re
+import json
 import hashlib
 from pathlib import Path
 from datetime import datetime
@@ -11,6 +12,9 @@ from markdownify import markdownify as md
 
 from ..core.models import Email
 from ..utils.formatting import sanitize_filename, normalize_subject
+
+
+STATE_FILE = "extraction_state.json"
 
 
 class ExportService:
@@ -24,12 +28,32 @@ class ExportService:
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.state_file = self.output_dir / STATE_FILE
+
+    def get_last_run(self) -> datetime | None:
+        """Get the timestamp of the last successful export."""
+        if not self.state_file.exists():
+            return None
+        try:
+            data = json.loads(self.state_file.read_text(encoding='utf-8'))
+            last_run = data.get('last_run')
+            if last_run:
+                return datetime.fromisoformat(last_run)
+        except Exception:
+            pass
+        return None
+
+    def save_state(self) -> None:
+        """Save the current timestamp as last run."""
+        data = {'last_run': datetime.now().isoformat()}
+        self.state_file.write_text(json.dumps(data, indent=2), encoding='utf-8')
 
     def export_emails(
         self,
         emails: list[Email],
         group_threads: bool = True,
         no_overwrite: bool = False,
+        save_state: bool = False,
     ) -> dict:
         """Export emails to markdown files.
 
@@ -37,6 +61,7 @@ class ExportService:
             emails: List of Email objects to export.
             group_threads: If True, group emails by subject into threads.
             no_overwrite: If True, skip existing files.
+            save_state: If True, save timestamp for incremental exports.
 
         Returns:
             dict with keys: files_created, files_skipped, emails_processed
@@ -49,6 +74,8 @@ class ExportService:
         }
 
         if not emails:
+            if save_state:
+                self.save_state()
             return result
 
         if group_threads:
@@ -68,6 +95,9 @@ class ExportService:
                     result['files'].append(str(file_path))
                 else:
                     result['files_skipped'] += 1
+
+        if save_state:
+            self.save_state()
 
         return result
 

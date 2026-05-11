@@ -98,6 +98,11 @@ def create_parser() -> argparse.ArgumentParser:
         action='store_true',
         help='Skip files that already exist',
     )
+    export_parser.add_argument(
+        '--incremental',
+        action='store_true',
+        help='Only export emails since last run (saves state to extraction_state.json)',
+    )
     export_parser.add_argument('--json', action='store_true', help='Output as JSON')
 
     # =========================================================================
@@ -451,17 +456,30 @@ def cmd_search(args) -> int:
 def cmd_export(args) -> int:
     """Handle 'export' command."""
     json_mode = getattr(args, 'json', False)
+    incremental = getattr(args, 'incremental', False)
 
     if not json_mode:
         print("Connecting to Outlook...")
     _, namespace = connect_to_outlook()
 
+    # For incremental mode, check last run and override since_date
+    exporter = ExportService(args.output)
     since_date, until_date = _get_date_range(args)
+
+    if incremental:
+        last_run = exporter.get_last_run()
+        if last_run:
+            since_date = last_run
+            if not json_mode:
+                print(f"Incremental mode: fetching emails since {last_run.strftime('%Y-%m-%d %H:%M')}")
+        else:
+            if not json_mode:
+                print("Incremental mode: no previous run found, using default date range")
 
     if not json_mode:
         print(f"\nExporting emails to: {args.output}")
         if since_date:
-            print(f"  From: {since_date.strftime('%Y-%m-%d')}")
+            print(f"  From: {since_date.strftime('%Y-%m-%d %H:%M')}")
         if until_date:
             print(f"  To: {until_date.strftime('%Y-%m-%d')}")
 
@@ -481,23 +499,26 @@ def cmd_export(args) -> int:
         print(f"Found {len(emails)} email(s)")
 
     if not emails:
+        if incremental:
+            exporter.save_state()
         if json_mode:
             _output_json(_json_success({
                 "emails_found": 0,
                 "files_created": 0,
                 "files_skipped": 0,
                 "output_directory": args.output,
+                "incremental": incremental,
             }))
         else:
             print("No emails to export.")
         return 0
 
     # Export
-    exporter = ExportService(args.output)
     result = exporter.export_emails(
         emails,
         group_threads=not args.no_threads,
         no_overwrite=args.no_overwrite,
+        save_state=incremental,
     )
 
     if json_mode:
@@ -506,6 +527,7 @@ def cmd_export(args) -> int:
             "files_created": result['files_created'],
             "files_skipped": result.get('files_skipped', 0),
             "output_directory": args.output,
+            "incremental": incremental,
         }))
     else:
         print(f"\nExport complete:")
@@ -513,6 +535,8 @@ def cmd_export(args) -> int:
         if result['files_skipped'] > 0:
             print(f"  Files skipped: {result['files_skipped']}")
         print(f"  Output directory: {args.output}")
+        if incremental:
+            print("  State saved for next incremental run")
 
     return 0
 

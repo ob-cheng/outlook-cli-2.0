@@ -165,6 +165,7 @@ Options:
 - `--keyword TEXT` - Filter by keyword
 - `--no-threads` - Export each email separately
 - `--no-overwrite` - Skip existing files
+- `--incremental` - Only export emails since last run (saves state)
 - `--json` - Output summary as JSON
 
 Examples:

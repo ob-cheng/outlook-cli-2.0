@@ -139,8 +139,11 @@ python outlook.py export --output ./all \
 # Export each email separately (no thread grouping)
 python outlook.py export --output ./singles --days 7 --no-threads
 
-# Skip files that already exist (incremental export)
+# Skip files that already exist
 python outlook.py export --output ./emails --days 30 --no-overwrite
+
+# Incremental export (only new emails since last run)
+python outlook.py export --output ./emails --incremental
 ```
 
 ### Send email
