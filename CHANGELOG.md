@@ -2,6 +2,49 @@
 
 All notable changes to Outlook CLI 2.0 will be documented in this file.
 
+## [2.2.0] - 2026-05-11
+
+### ✨ Added
+
+**Task/Todo Management:**
+
+- `tasks list` - List tasks with filters (status, priority, due date, category)
+- `tasks read` - View task details
+- `tasks create` - Create tasks with due date, priority, reminder
+- `tasks complete` - Mark tasks as complete
+- `tasks delete` - Delete tasks
+- Full JSON output support for all task commands
+- Task model and TaskService for programmatic access
+
+### 📚 Documentation
+
+- Updated README with task commands and examples
+- Updated SKILL.md with task management for AI agents
+- Updated CLAUDE.md quick reference
+
+---
+
+## [2.1.0] - 2026-05-11
+
+### ✨ Added
+
+**JSON Export for AI Ingestion:**
+
+- `--format json` option for export command - output as JSON instead of markdown
+- `--batch` option - combine all emails into a single JSON file (most token-efficient)
+- `--stdout` option - output JSON directly to terminal for AI agent pipelines
+- Lean JSON structure optimized for LLM consumption (~15-20% fewer tokens than markdown)
+- `to_json_data()` method in ExportService for programmatic access
+
+### 📚 Documentation
+
+- Updated README with JSON export section and examples
+- Updated SKILL.md with new export options for AI agents
+- Updated EXAMPLES.md with AI workflow examples
+- Updated CLAUDE.md quick reference
+
+---
+
 ## [2.0.0] - 2026-05-11
 
 ### 🎉 Major Rewrite - Outlook CLI 2.0

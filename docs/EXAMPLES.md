@@ -33,6 +33,35 @@ python outlook.py export --output ~/temp/emails --days 3 --incremental
 # Then in Claude Code: "Summarize the emails in ~/temp/emails"
 ```
 
+### Token-efficient export for LLMs
+
+```bash
+# JSON batch export - all emails in single file, optimized for AI ingestion
+python outlook.py export --output ~/data --format json --batch --days 7
+
+# Result: emails_20260511_103000.json with all threads in one file
+# ~15-20% fewer tokens than markdown equivalent
+```
+
+### Direct stdout for agents (no files)
+
+```bash
+# Output JSON directly to terminal - agent can read instantly
+python outlook.py export --output . --stdout --days 3
+
+# Pipe to another tool
+python outlook.py export --output . --stdout --filter-email boss@co.com | jq '.threads[0]'
+```
+
+### Export for RAG pipelines
+
+```bash
+# JSON export with threads for embedding
+python outlook.py export --output ~/rag/emails --format json --days 30
+
+# Each thread becomes a separate JSON file, good for chunking by conversation
+```
+
 ### Schedule meetings from natural language
 With Claude Code skill installed:
 ```

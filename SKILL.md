@@ -1,6 +1,6 @@
 ---
 name: outlook-cli
-description: Search, send, and manage Outlook emails and calendar from the command line. Use when the user wants to search emails, send messages, reply, forward, export to markdown, or manage calendar events.
+description: Search, send, and manage Outlook emails, calendar, and tasks from the command line. Use when the user wants to search emails, send messages, reply, forward, export to markdown/JSON, manage calendar events, or manage tasks/todos. Supports --stdout for direct JSON output to AI agents.
 ---
 
 # outlook-cli
@@ -150,19 +150,22 @@ Options:
 
 ---
 
-### export - Export to Obsidian markdown
+### export - Export emails to markdown or JSON
 
 ```bash
 python outlook.py export --output DIR [options]
 ```
 
 Options:
-- `--output DIR` - Output directory (required)
+- `--output DIR` - Output directory (required, use `.` with --stdout)
 - `--days N` - Days to look back (default: 7)
 - `--folder NAME` - Folder to export (can specify multiple)
 - `--filter-email ADDRESS` - Filter by participant
 - `--filter-domain DOMAIN` - Filter by domain
 - `--keyword TEXT` - Filter by keyword
+- `--format FORMAT` - Output format: `markdown` (default) or `json`
+- `--batch` - For JSON: combine all emails into single file
+- `--stdout` - Output JSON to terminal (no files, best for AI ingestion)
 - `--no-threads` - Export each email separately
 - `--no-overwrite` - Skip existing files
 - `--incremental` - Only export emails since last run (saves state)
@@ -170,7 +173,16 @@ Options:
 
 Examples:
 ```bash
+# Markdown export (default)
 python outlook.py export --output ./emails --days 30
+
+# JSON export to files
+python outlook.py export --output ./data --format json --batch
+
+# JSON direct to stdout (best for AI processing)
+python outlook.py export --output . --stdout --days 7
+
+# Filtered export
 python outlook.py export --output ./project --filter-email client@vendor.com --keyword "contract"
 ```
 
@@ -229,6 +241,80 @@ Options:
 
 ```bash
 python outlook.py cal delete <event-id>
+```
+
+Options:
+- `--json` - Output as JSON
+
+---
+
+### tasks list - List tasks/todos
+
+```bash
+python outlook.py tasks list [options]
+```
+
+Options:
+- `--status STATUS` - Filter: `not_started`, `in_progress`, `completed`, `waiting`, `deferred`
+- `--all` - Include completed tasks
+- `--due-before DATE` - Tasks due before date (YYYY-MM-DD)
+- `--due-after DATE` - Tasks due after date (YYYY-MM-DD)
+- `--priority PRIORITY` - Filter: `low`, `normal`, `high`
+- `--category NAME` - Filter by category
+- `--json` - Output as JSON
+
+---
+
+### tasks read - View task details
+
+```bash
+python outlook.py tasks read <task-id>
+```
+
+Options:
+- `--json` - Output as JSON
+
+---
+
+### tasks create - Create a new task
+
+```bash
+python outlook.py tasks create --subject TEXT [options]
+```
+
+Options:
+- `--subject TEXT` - Task subject (required)
+- `--due DATE` - Due date (YYYY-MM-DD)
+- `--start DATE` - Start date (YYYY-MM-DD)
+- `--priority PRIORITY` - Priority: `low`, `normal` (default), `high`
+- `--body TEXT` - Task description
+- `--category NAME` - Category name
+- `--reminder DATETIME` - Reminder (YYYY-MM-DD HH:MM)
+- `--json` - Output as JSON
+
+Examples:
+```bash
+python outlook.py tasks create --subject "Review PR" --due 2026-05-15 --priority high
+python outlook.py tasks create --subject "Follow up" --due 2026-05-20 --body "Check status with team"
+```
+
+---
+
+### tasks complete - Mark task as complete
+
+```bash
+python outlook.py tasks complete <task-id>
+```
+
+Options:
+- `--json` - Output as JSON
+
+---
+
+### tasks delete - Delete a task
+
+```bash
+python outlook.py tasks delete <task-id>
 ```
 
 Options:
@@ -316,4 +402,28 @@ python outlook.py cal create \
   --end "2026-05-15 15:00" \
   --location "Room A" \
   --required "alice@co.com,bob@co.com"
+```
+
+**AI-friendly email export (direct JSON):**
+```bash
+# Get recent emails as JSON for AI processing - no files written
+python outlook.py export --output . --stdout --days 7
+
+# Filter and pipe to processing
+python outlook.py export --output . --stdout --filter-email client@co.com | your-ai-tool
+```
+
+**Task management:**
+```bash
+# List pending tasks
+python outlook.py tasks list
+
+# Create task with due date
+python outlook.py tasks create --subject "Review PR #42" --due 2026-05-15 --priority high
+
+# Mark complete
+python outlook.py tasks complete <task-id>
+
+# Get tasks as JSON for automation
+python outlook.py tasks list --json
 ```

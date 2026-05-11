@@ -11,6 +11,7 @@ from rich import box
 from ..core.models import Email
 from ..core.folders import list_all_folders
 from .calendar import CalendarEvent
+from .tasks import Task
 
 
 # Force UTF-8 encoding on Windows
@@ -310,3 +311,116 @@ class ViewerService:
         # Print event ID
         if event.entry_id:
             self.console.print(f"\n[dim]Event ID: {event.entry_id}[/dim]")
+
+    def print_tasks_table(self, tasks: list[Task], title: str = "Tasks") -> None:
+        """Print tasks as a formatted table."""
+        if not tasks:
+            self.console.print("[yellow]No tasks found.[/yellow]")
+            return
+
+        table = Table(
+            title=title,
+            box=box.ROUNDED,
+            show_lines=False,
+            header_style="bold cyan",
+        )
+
+        table.add_column("!", width=1)  # Priority indicator
+        table.add_column("Status", style="white", width=12)
+        table.add_column("Subject", style="white", max_width=35, overflow="ellipsis")
+        table.add_column("Due Date", style="green", width=12)
+        table.add_column("%", style="cyan", width=4)
+        table.add_column("ID", style="dim", max_width=20, overflow="ellipsis")
+
+        status_styles = {
+            "not_started": "[white]Not Started[/]",
+            "in_progress": "[blue]In Progress[/]",
+            "completed": "[green]Completed[/]",
+            "waiting": "[yellow]Waiting[/]",
+            "deferred": "[dim]Deferred[/]",
+        }
+
+        for task in tasks:
+            priority = "[bold red]![/]" if task.priority == "high" else ("[dim]v[/]" if task.priority == "low" else "")
+            status = status_styles.get(task.status, task.status)
+            subject = task.subject or "(no subject)"
+            due_str = task.due_date.strftime("%Y-%m-%d") if task.due_date else ""
+            percent = f"{task.percent_complete}%" if task.percent_complete > 0 else ""
+            short_id = task.entry_id[:20] + "..." if task.entry_id and len(task.entry_id) > 20 else (task.entry_id or "")
+
+            table.add_row(
+                priority,
+                status,
+                subject,
+                due_str,
+                percent,
+                short_id,
+            )
+
+        self.console.print(table)
+        self.console.print(f"\n[dim]Total: {len(tasks)} task(s)[/dim]")
+
+    def print_task_detail(self, task: Task) -> None:
+        """Print a single task in detail."""
+        # Header info
+        header_lines = []
+
+        # Status with color
+        status_display = {
+            "not_started": "[white]Not Started[/]",
+            "in_progress": "[blue]In Progress[/]",
+            "completed": "[green]Completed[/]",
+            "waiting": "[yellow]Waiting[/]",
+            "deferred": "[dim]Deferred[/]",
+        }
+        header_lines.append(f"[bold]Status:[/bold] {status_display.get(task.status, task.status)}")
+
+        # Priority
+        priority_display = {
+            "high": "[red]High[/red]",
+            "normal": "Normal",
+            "low": "[dim]Low[/dim]",
+        }
+        header_lines.append(f"[bold]Priority:[/bold] {priority_display.get(task.priority, task.priority)}")
+
+        # Progress
+        if task.percent_complete > 0:
+            header_lines.append(f"[bold]Progress:[/bold] {task.percent_complete}%")
+
+        # Dates
+        if task.start_date:
+            header_lines.append(f"[bold]Start Date:[/bold] {task.start_date.strftime('%Y-%m-%d')}")
+        if task.due_date:
+            header_lines.append(f"[bold]Due Date:[/bold] {task.due_date.strftime('%Y-%m-%d')}")
+        if task.completed_date:
+            header_lines.append(f"[bold]Completed:[/bold] {task.completed_date.strftime('%Y-%m-%d %H:%M')}")
+
+        # Reminder
+        if task.reminder_date:
+            header_lines.append(f"[bold]Reminder:[/bold] {task.reminder_date.strftime('%Y-%m-%d %H:%M')}")
+
+        # Categories
+        if task.categories:
+            header_lines.append(f"[bold]Categories:[/bold] {', '.join(task.categories)}")
+
+        header = "\n".join(header_lines)
+
+        # Print header panel
+        title = task.subject or "(no subject)"
+        self.console.print(Panel(
+            header,
+            title=f"[bold]{title}[/bold]",
+            border_style="blue",
+            padding=(1, 2),
+        ))
+
+        # Print body
+        if task.body:
+            self.console.print()
+            self.console.print(task.body)
+        else:
+            self.console.print("\n[dim](no description)[/dim]")
+
+        # Print task ID
+        if task.entry_id:
+            self.console.print(f"\n[dim]Task ID: {task.entry_id}[/dim]")

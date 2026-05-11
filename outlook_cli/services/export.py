@@ -54,14 +54,18 @@ class ExportService:
         group_threads: bool = True,
         no_overwrite: bool = False,
         save_state: bool = False,
+        output_format: str = 'markdown',
+        batch: bool = False,
     ) -> dict:
-        """Export emails to markdown files.
+        """Export emails to files.
 
         Args:
             emails: List of Email objects to export.
             group_threads: If True, group emails by subject into threads.
             no_overwrite: If True, skip existing files.
             save_state: If True, save timestamp for incremental exports.
+            output_format: 'markdown' or 'json'.
+            batch: For JSON, combine all emails into a single file.
 
         Returns:
             dict with keys: files_created, files_skipped, emails_processed
@@ -77,6 +81,9 @@ class ExportService:
             if save_state:
                 self.save_state()
             return result
+
+        if output_format == 'json':
+            return self._export_json(emails, group_threads, no_overwrite, save_state, batch)
 
         if group_threads:
             threads = self._group_into_threads(emails)
@@ -100,6 +107,208 @@ class ExportService:
             self.save_state()
 
         return result
+
+    def _export_json(
+        self,
+        emails: list[Email],
+        group_threads: bool,
+        no_overwrite: bool,
+        save_state: bool,
+        batch: bool,
+    ) -> dict:
+        """Export emails to JSON format."""
+        result = {
+            'files_created': 0,
+            'files_skipped': 0,
+            'emails_processed': len(emails),
+            'files': [],
+        }
+
+        if batch:
+            file_path = self._export_json_batch(emails, group_threads, no_overwrite)
+            if file_path:
+                result['files_created'] = 1
+                result['files'].append(str(file_path))
+            else:
+                result['files_skipped'] = 1
+        elif group_threads:
+            threads = self._group_into_threads(emails)
+            for thread_subject, thread_emails in threads.items():
+                file_path = self._export_json_thread(thread_emails, thread_subject, no_overwrite)
+                if file_path:
+                    result['files_created'] += 1
+                    result['files'].append(str(file_path))
+                else:
+                    result['files_skipped'] += 1
+        else:
+            for email in emails:
+                file_path = self._export_json_single(email, no_overwrite)
+                if file_path:
+                    result['files_created'] += 1
+                    result['files'].append(str(file_path))
+                else:
+                    result['files_skipped'] += 1
+
+        if save_state:
+            self.save_state()
+
+        return result
+
+    def _export_json_batch(
+        self,
+        emails: list[Email],
+        group_threads: bool,
+        no_overwrite: bool,
+    ) -> Path | None:
+        """Export all emails to a single JSON file."""
+        filename = f"emails_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        output_path = self.output_dir / filename
+
+        if output_path.exists() and no_overwrite:
+            return None
+
+        if group_threads:
+            threads = self._group_into_threads(emails)
+            data = {
+                "export_date": datetime.now().isoformat(),
+                "thread_count": len(threads),
+                "email_count": len(emails),
+                "threads": [
+                    self._thread_to_json(thread_emails, thread_subject)
+                    for thread_subject, thread_emails in threads.items()
+                ]
+            }
+        else:
+            data = {
+                "export_date": datetime.now().isoformat(),
+                "email_count": len(emails),
+                "emails": [self._email_to_json(e) for e in emails]
+            }
+
+        output_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding='utf-8')
+        return output_path
+
+    def _export_json_thread(
+        self,
+        emails: list[Email],
+        thread_subject: str,
+        no_overwrite: bool,
+    ) -> Path | None:
+        """Export a thread to a JSON file."""
+        sorted_emails = sorted(
+            [e for e in emails if e.date],
+            key=lambda x: x.date
+        )
+        if not sorted_emails:
+            return None
+
+        latest_date = max(e.date for e in sorted_emails if e.date)
+        date_prefix = latest_date.strftime("%Y-%m-%d_%H%M")
+        filename = f"{date_prefix}_{sanitize_filename(thread_subject)}.json"
+        output_path = self.output_dir / filename
+
+        if output_path.exists():
+            if no_overwrite:
+                return None
+            file_hash = hashlib.md5(thread_subject.encode()).hexdigest()[:8]
+            filename = f"{date_prefix}_{sanitize_filename(thread_subject)}_{file_hash}.json"
+            output_path = self.output_dir / filename
+            if output_path.exists() and no_overwrite:
+                return None
+
+        data = self._thread_to_json(sorted_emails, thread_subject)
+        output_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding='utf-8')
+        return output_path
+
+    def _export_json_single(self, email: Email, no_overwrite: bool) -> Path | None:
+        """Export a single email to a JSON file."""
+        if not email.date:
+            return None
+
+        date_prefix = email.date.strftime("%Y-%m-%d_%H%M")
+        filename = f"{date_prefix}_{sanitize_filename(email.subject)}.json"
+        output_path = self.output_dir / filename
+
+        if output_path.exists() and no_overwrite:
+            return None
+
+        data = self._email_to_json(email)
+        output_path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding='utf-8')
+        return output_path
+
+    def _thread_to_json(self, emails: list[Email], thread_subject: str) -> dict:
+        """Convert a thread to JSON-friendly dict."""
+        sorted_emails = sorted(
+            [e for e in emails if e.date],
+            key=lambda x: x.date
+        )
+        if not sorted_emails:
+            return {}
+
+        first_date = sorted_emails[0].date
+        last_date = sorted_emails[-1].date
+        participants = self._collect_participants(sorted_emails)
+
+        return {
+            "subject": thread_subject,
+            "message_count": len(sorted_emails),
+            "date_start": first_date.isoformat() if first_date else None,
+            "date_end": last_date.isoformat() if last_date else None,
+            "participants": participants,
+            "messages": [self._email_to_json(e) for e in sorted_emails]
+        }
+
+    def _email_to_json(self, email: Email) -> dict:
+        """Convert email to lean JSON dict optimized for AI ingestion."""
+        content = self._extract_content(email)
+        content = self._clean_content(content)
+
+        return {
+            "id": email.message_id,
+            "subject": email.subject,
+            "from": email.sender_clean,
+            "from_email": email.sender_smtp,
+            "to": email.to_emails,
+            "cc": email.cc_emails if email.cc_emails else None,
+            "date": email.date.isoformat() if email.date else None,
+            "direction": "sent" if email.is_sent else "received",
+            "body": content if content else None,
+        }
+
+    def to_json_data(self, emails: list[Email], group_threads: bool = True) -> dict:
+        """Generate JSON data structure without writing files.
+
+        Args:
+            emails: List of Email objects.
+            group_threads: If True, group emails by subject into threads.
+
+        Returns:
+            dict ready for JSON serialization.
+        """
+        if not emails:
+            return {
+                "export_date": datetime.now().isoformat(),
+                "email_count": 0,
+                "threads" if group_threads else "emails": []
+            }
+
+        if group_threads:
+            threads = self._group_into_threads(emails)
+            return {
+                "export_date": datetime.now().isoformat(),
+                "thread_count": len(threads),
+                "email_count": len(emails),
+                "threads": [
+                    self._thread_to_json(thread_emails, thread_subject)
+                    for thread_subject, thread_emails in threads.items()
+                ]
+            }
+        else:
+            return {
+                "export_date": datetime.now().isoformat(),
+                "email_count": len(emails),
+                "emails": [self._email_to_json(e) for e in emails]
+            }
 
     def _group_into_threads(self, emails: list[Email]) -> dict[str, list[Email]]:
         """Group emails by normalized subject."""

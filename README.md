@@ -14,9 +14,11 @@ This one takes a different approach: COM automation on your local Windows machin
 - Send emails with CC, BCC, attachments, HTML formatting
 - Reply and forward messages
 - Save drafts for review before sending
-- Export email threads to Obsidian markdown (with incremental sync)
+- Export email threads to Obsidian markdown or JSON (with incremental sync)
+- JSON export with `--stdout` for direct AI agent ingestion
 - List, create, and delete calendar events
-- JSON output for agent/automation integration
+- Manage tasks/todos (list, create, complete, delete)
+- JSON output on all commands for agent/automation integration
 - Works offline since everything is local
 
 ## Install
@@ -63,6 +65,9 @@ python outlook.py export --output ~/Obsidian/Emails --days 30
 
 # Incremental sync (only new emails since last run)
 python outlook.py export --output ~/Obsidian/Emails --incremental
+
+# Export as JSON for AI processing (direct to stdout)
+python outlook.py export --output . --stdout --days 7
 ```
 
 ## Command reference
@@ -73,7 +78,7 @@ python outlook.py export --output ~/Obsidian/Emails --incremental
 |---------|-------------|
 | `search` | Search and display emails in terminal |
 | `read` | Read full email content by message ID |
-| `export` | Export emails to Obsidian markdown |
+| `export` | Export emails to markdown or JSON |
 | `send` | Send a new email |
 | `reply` | Reply to an email |
 | `forward` | Forward an email |
@@ -87,6 +92,16 @@ python outlook.py export --output ~/Obsidian/Emails --incremental
 | `cal read` | View event details |
 | `cal create` | Create a calendar event |
 | `cal delete` | Delete a calendar event |
+
+### Task commands
+
+| Command | Description |
+|---------|-------------|
+| `tasks list` | List tasks/todos |
+| `tasks read` | View task details |
+| `tasks create` | Create a new task |
+| `tasks complete` | Mark task as complete |
+| `tasks delete` | Delete a task |
 
 ### Global options
 
@@ -136,6 +151,9 @@ python outlook.py export --output DIR [options]
 | `--filter-email`, `-f` | Filter by email address |
 | `--filter-domain`, `-D` | Filter by domain |
 | `--keyword`, `-k` | Filter by keyword |
+| `--format` | Output format: `markdown` (default) or `json` |
+| `--batch` | For JSON: combine all emails into single file |
+| `--stdout` | Output JSON to terminal (no files, for agents/pipelines) |
 | `--no-threads` | Export each email separately |
 | `--no-overwrite` | Skip existing files |
 | `--incremental` | Only export since last run (saves state) |
@@ -227,6 +245,51 @@ python outlook.py cal create --subject TEXT --start DATETIME --end DATETIME [opt
 | `--no-reminder` | No reminder |
 | `--json` | Output as JSON |
 
+### tasks list
+
+```bash
+python outlook.py tasks list [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--status` | Filter: `not_started`, `in_progress`, `completed`, `waiting`, `deferred` |
+| `--all` | Include completed tasks |
+| `--due-before` | Tasks due before date (YYYY-MM-DD) |
+| `--due-after` | Tasks due after date (YYYY-MM-DD) |
+| `--priority` | Filter: `low`, `normal`, `high` |
+| `--category` | Filter by category name |
+| `--json` | Output as JSON |
+
+### tasks create
+
+```bash
+python outlook.py tasks create --subject TEXT [options]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--subject`, `-s` | Task subject (required) |
+| `--due` | Due date (YYYY-MM-DD) |
+| `--start` | Start date (YYYY-MM-DD) |
+| `--priority` | Priority: `low`, `normal` (default), `high` |
+| `--body`, `-b` | Task description |
+| `--category` | Category name |
+| `--reminder` | Reminder date/time (YYYY-MM-DD HH:MM) |
+| `--json` | Output as JSON |
+
+### tasks complete
+
+```bash
+python outlook.py tasks complete <task-id>
+```
+
+### tasks delete
+
+```bash
+python outlook.py tasks delete <task-id>
+```
+
 ## Use cases
 
 ### Incremental email sync to Obsidian
@@ -268,6 +331,22 @@ python outlook.py cal create \
   --start "2026-05-15 14:00" \
   --end "2026-05-15 15:00" \
   --required "alice@co.com,bob@co.com"
+```
+
+### Manage tasks
+
+```bash
+# See pending tasks
+python outlook.py tasks list
+
+# Create a task with due date
+python outlook.py tasks create --subject "Review PR #42" --due 2026-05-15 --priority high
+
+# Mark complete
+python outlook.py tasks complete <task-id>
+
+# Get tasks as JSON for automation
+python outlook.py tasks list --json
 ```
 
 ## Agent integration
@@ -357,6 +436,60 @@ Your reply here.
 ```
 
 Threads are grouped by subject. Each message is marked as sent or received. Tracking URLs, signature tables, "CAUTION: external email" warnings, and quoted reply chains are stripped.
+
+### JSON export (for AI ingestion)
+
+For AI/LLM workflows, JSON format is more token-efficient:
+
+```bash
+# One JSON file per thread
+python outlook.py export --output ~/data --format json
+
+# All emails in single file (most efficient for bulk processing)
+python outlook.py export --output ~/data --format json --batch
+
+# Direct to terminal (no files written) - ideal for agents
+python outlook.py export --output . --stdout --days 7
+```
+
+JSON structure:
+
+```json
+{
+  "export_date": "2026-05-11T10:30:00",
+  "thread_count": 5,
+  "email_count": 12,
+  "threads": [
+    {
+      "subject": "Project Update",
+      "message_count": 3,
+      "date_start": "2026-05-08T09:00:00",
+      "date_end": "2026-05-10T14:30:00",
+      "participants": ["Alice Smith", "Bob Jones"],
+      "messages": [
+        {
+          "id": "00000000ABC...",
+          "subject": "Project Update",
+          "from": "Alice Smith",
+          "from_email": "alice@company.com",
+          "to": ["bob@company.com"],
+          "cc": null,
+          "date": "2026-05-08T09:00:00",
+          "direction": "received",
+          "body": "Clean text content without HTML or quoted replies"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Benefits over markdown for AI:
+
+- ~15-20% fewer tokens (no formatting overhead)
+- Single file for batch processing
+- Structured fields for direct extraction
+- Same content cleaning (signatures, quoted replies stripped)
 
 ## Documentation
 

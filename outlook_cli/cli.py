@@ -103,6 +103,23 @@ def create_parser() -> argparse.ArgumentParser:
         action='store_true',
         help='Only export emails since last run (saves state to extraction_state.json)',
     )
+    export_parser.add_argument(
+        '--format',
+        type=str,
+        choices=['markdown', 'json'],
+        default='markdown',
+        help='Output format: markdown (default) or json',
+    )
+    export_parser.add_argument(
+        '--batch',
+        action='store_true',
+        help='For JSON format: combine all emails into a single file (more token-efficient)',
+    )
+    export_parser.add_argument(
+        '--stdout',
+        action='store_true',
+        help='Output JSON to terminal instead of files (for agent/pipeline use)',
+    )
     export_parser.add_argument('--json', action='store_true', help='Output as JSON')
 
     # =========================================================================
@@ -302,6 +319,48 @@ def create_parser() -> argparse.ArgumentParser:
     cal_delete.add_argument('event_id', help='Event ID (EntryID)')
     cal_delete.add_argument('--json', action='store_true', help='Output as JSON')
 
+    # =========================================================================
+    # tasks command
+    # =========================================================================
+    tasks_parser = subparsers.add_parser('tasks', help='Task/todo management')
+    tasks_subparsers = tasks_parser.add_subparsers(dest='tasks_command', help='Task commands')
+
+    # tasks list
+    tasks_list = tasks_subparsers.add_parser('list', help='List tasks')
+    tasks_list.add_argument('--status', type=str, choices=['not_started', 'in_progress', 'completed', 'waiting', 'deferred'], help='Filter by status')
+    tasks_list.add_argument('--all', action='store_true', help='Include completed tasks')
+    tasks_list.add_argument('--due-before', type=str, help='Tasks due before date (YYYY-MM-DD)')
+    tasks_list.add_argument('--due-after', type=str, help='Tasks due after date (YYYY-MM-DD)')
+    tasks_list.add_argument('--priority', type=str, choices=['low', 'normal', 'high'], help='Filter by priority')
+    tasks_list.add_argument('--category', type=str, help='Filter by category')
+    tasks_list.add_argument('--json', action='store_true', help='Output as JSON')
+
+    # tasks read
+    tasks_read = tasks_subparsers.add_parser('read', help='Read task details')
+    tasks_read.add_argument('task_id', help='Task ID (EntryID)')
+    tasks_read.add_argument('--json', action='store_true', help='Output as JSON')
+
+    # tasks create
+    tasks_create = tasks_subparsers.add_parser('create', help='Create a new task')
+    tasks_create.add_argument('--subject', '-s', type=str, required=True, help='Task subject')
+    tasks_create.add_argument('--due', type=str, help='Due date (YYYY-MM-DD)')
+    tasks_create.add_argument('--start', type=str, help='Start date (YYYY-MM-DD)')
+    tasks_create.add_argument('--priority', type=str, choices=['low', 'normal', 'high'], default='normal', help='Priority (default: normal)')
+    tasks_create.add_argument('--body', '-b', type=str, help='Task description')
+    tasks_create.add_argument('--category', type=str, help='Category name')
+    tasks_create.add_argument('--reminder', type=str, help='Reminder date/time (YYYY-MM-DD HH:MM)')
+    tasks_create.add_argument('--json', action='store_true', help='Output as JSON')
+
+    # tasks complete
+    tasks_complete = tasks_subparsers.add_parser('complete', help='Mark task as complete')
+    tasks_complete.add_argument('task_id', help='Task ID (EntryID)')
+    tasks_complete.add_argument('--json', action='store_true', help='Output as JSON')
+
+    # tasks delete
+    tasks_delete = tasks_subparsers.add_parser('delete', help='Delete a task')
+    tasks_delete.add_argument('task_id', help='Task ID (EntryID)')
+    tasks_delete.add_argument('--json', action='store_true', help='Output as JSON')
+
     return parser
 
 
@@ -457,26 +516,30 @@ def cmd_export(args) -> int:
     """Handle 'export' command."""
     json_mode = getattr(args, 'json', False)
     incremental = getattr(args, 'incremental', False)
+    stdout_mode = getattr(args, 'stdout', False)
 
-    if not json_mode:
+    # Stdout mode implies JSON format and suppresses other output
+    quiet_mode = json_mode or stdout_mode
+
+    if not quiet_mode:
         print("Connecting to Outlook...")
     _, namespace = connect_to_outlook()
 
     # For incremental mode, check last run and override since_date
-    exporter = ExportService(args.output)
+    exporter = ExportService(args.output) if not stdout_mode else None
     since_date, until_date = _get_date_range(args)
 
-    if incremental:
+    if incremental and exporter:
         last_run = exporter.get_last_run()
         if last_run:
             since_date = last_run
-            if not json_mode:
+            if not quiet_mode:
                 print(f"Incremental mode: fetching emails since {last_run.strftime('%Y-%m-%d %H:%M')}")
         else:
-            if not json_mode:
+            if not quiet_mode:
                 print("Incremental mode: no previous run found, using default date range")
 
-    if not json_mode:
+    if not quiet_mode:
         print(f"\nExporting emails to: {args.output}")
         if since_date:
             print(f"  From: {since_date.strftime('%Y-%m-%d %H:%M')}")
@@ -495,8 +558,16 @@ def cmd_export(args) -> int:
         filter_keyword=args.keyword,
     )
 
-    if not json_mode:
+    if not quiet_mode:
         print(f"Found {len(emails)} email(s)")
+
+    # Stdout mode: output JSON directly to terminal
+    if stdout_mode:
+        from .services.export import ExportService as ES
+        temp_exporter = ES(Path.cwd())  # Just need the methods, not the directory
+        data = temp_exporter.to_json_data(emails, group_threads=not args.no_threads)
+        _output_json(data)
+        return 0
 
     if not emails:
         if incremental:
@@ -513,12 +584,14 @@ def cmd_export(args) -> int:
             print("No emails to export.")
         return 0
 
-    # Export
+    # Export to files
     result = exporter.export_emails(
         emails,
         group_threads=not args.no_threads,
         no_overwrite=args.no_overwrite,
         save_state=incremental,
+        output_format=args.format,
+        batch=args.batch,
     )
 
     if json_mode:
@@ -527,14 +600,19 @@ def cmd_export(args) -> int:
             "files_created": result['files_created'],
             "files_skipped": result.get('files_skipped', 0),
             "output_directory": args.output,
+            "format": args.format,
+            "batch": args.batch,
             "incremental": incremental,
         }))
     else:
         print(f"\nExport complete:")
+        print(f"  Format: {args.format}")
         print(f"  Files created: {result['files_created']}")
         if result['files_skipped'] > 0:
             print(f"  Files skipped: {result['files_skipped']}")
         print(f"  Output directory: {args.output}")
+        if args.batch:
+            print("  Mode: batch (all emails in single file)")
         if incremental:
             print("  State saved for next incremental run")
 
@@ -821,6 +899,134 @@ def cmd_cal(args) -> int:
     return 0
 
 
+def _parse_date(date_str: str) -> datetime:
+    """Parse date string in format YYYY-MM-DD."""
+    return datetime.strptime(date_str, "%Y-%m-%d")
+
+
+def cmd_tasks(args) -> int:
+    """Handle 'tasks' command."""
+    if not args.tasks_command:
+        print("Usage: outlook tasks {list,read,create,complete,delete}")
+        return 1
+
+    json_mode = getattr(args, 'json', False)
+
+    if not json_mode:
+        print("Connecting to Outlook...")
+    _, namespace = connect_to_outlook()
+
+    from .services.tasks import TaskService
+    tasks_service = TaskService(namespace)
+
+    if args.tasks_command == 'list':
+        due_before = _parse_date(args.due_before) if getattr(args, 'due_before', None) else None
+        due_after = _parse_date(args.due_after) if getattr(args, 'due_after', None) else None
+
+        if not json_mode:
+            print("\nSearching tasks...")
+
+        tasks = tasks_service.list_tasks(
+            status=args.status,
+            include_completed=getattr(args, 'all', False),
+            due_before=due_before,
+            due_after=due_after,
+            priority=args.priority,
+            category=args.category,
+        )
+
+        if json_mode:
+            _output_json(_json_success({
+                "count": len(tasks),
+                "tasks": [t.to_dict() for t in tasks],
+            }))
+        else:
+            print(f"\nFound {len(tasks)} task(s)\n")
+            viewer = ViewerService()
+            viewer.print_tasks_table(tasks)
+
+    elif args.tasks_command == 'read':
+        task = tasks_service.get_task(args.task_id)
+        if not task:
+            if json_mode:
+                _output_json(_json_error(f"Task not found: {args.task_id}", "not_found"))
+            else:
+                print(f"Task not found: {args.task_id}")
+            return 1
+
+        if json_mode:
+            _output_json(_json_success({"task": task.to_dict()}))
+        else:
+            viewer = ViewerService()
+            viewer.print_task_detail(task)
+
+    elif args.tasks_command == 'create':
+        due_date = _parse_date(args.due) if args.due else None
+        start_date = _parse_date(args.start) if args.start else None
+        reminder_date = _parse_datetime(args.reminder) if args.reminder else None
+        categories = [args.category] if args.category else None
+
+        success, message = tasks_service.create_task(
+            subject=args.subject,
+            due_date=due_date,
+            start_date=start_date,
+            priority=args.priority,
+            body=args.body,
+            categories=categories,
+            reminder_date=reminder_date,
+        )
+
+        if json_mode:
+            if success:
+                _output_json(_json_success({"task_id": message, "subject": args.subject}))
+            else:
+                _output_json(_json_error(message, "create_failed"))
+            return 0 if success else 1
+
+        if success:
+            print(f"✓ Task created (ID: {message})")
+            return 0
+        else:
+            print(f"✗ {message}")
+            return 1
+
+    elif args.tasks_command == 'complete':
+        success, message = tasks_service.complete_task(args.task_id)
+
+        if json_mode:
+            if success:
+                _output_json(_json_success({"message": message, "task_id": args.task_id}))
+            else:
+                _output_json(_json_error(message, "complete_failed"))
+            return 0 if success else 1
+
+        if success:
+            print(f"✓ {message}")
+            return 0
+        else:
+            print(f"✗ {message}")
+            return 1
+
+    elif args.tasks_command == 'delete':
+        success, message = tasks_service.delete_task(args.task_id)
+
+        if json_mode:
+            if success:
+                _output_json(_json_success({"message": message}))
+            else:
+                _output_json(_json_error(message, "delete_failed"))
+            return 0 if success else 1
+
+        if success:
+            print(f"✓ {message}")
+            return 0
+        else:
+            print(f"✗ {message}")
+            return 1
+
+    return 0
+
+
 def main() -> int:
     """Main entry point."""
     parser = create_parser()
@@ -847,6 +1053,8 @@ def main() -> int:
             return cmd_forward(args)
         elif args.command == 'cal':
             return cmd_cal(args)
+        elif args.command == 'tasks':
+            return cmd_tasks(args)
         else:
             parser.print_help()
             return 1
