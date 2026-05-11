@@ -67,7 +67,7 @@ python outlook.py export --output ~/Obsidian/Emails --incremental
 
 ## Command reference
 
-### Core commands
+### Email commands
 
 | Command | Description |
 |---------|-------------|
@@ -77,11 +77,16 @@ python outlook.py export --output ~/Obsidian/Emails --incremental
 | `send` | Send a new email |
 | `reply` | Reply to an email |
 | `forward` | Forward an email |
+| `folders` | List all available folders |
+
+### Calendar commands
+
+| Command | Description |
+|---------|-------------|
 | `cal list` | List calendar events |
 | `cal read` | View event details |
 | `cal create` | Create a calendar event |
 | `cal delete` | Delete a calendar event |
-| `folders` | List all available folders |
 
 ### Global options
 
