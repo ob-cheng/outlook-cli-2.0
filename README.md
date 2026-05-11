@@ -180,6 +180,7 @@ python outlook.py forward <message-id> --to ADDRESS [options]
 | `--to`, `-t` | Forward recipient (required) |
 | `--body`, `-b` | Optional message to add |
 | `--cc` | CC recipients |
+| `--bcc` | BCC recipients |
 | `--attach`, `-a` | Additional attachment |
 | `--html` | Body is HTML |
 | `--draft` | Save as draft |
